@@ -1,0 +1,20 @@
+{
+  "name": "NodeSSPI",
+  "version": "0.0.0",
+  "description": "Windows SSPI authentication for Node",
+  "main": "index.js",
+  "author": "Fred Wen<wenfred@gmail.com>",
+  "license": "MIT",
+	"scripts": {
+		"install": "node ./build.js"
+	},
+  "dependencies": {
+    "bindings": "~1.1.1"
+  },
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/abbr/nodesspi.git"
+	},
+	"homepage": "https://github.com/abbr/nodesspi",
+	"keywords": ["SSPI", "authentication"]
+}
