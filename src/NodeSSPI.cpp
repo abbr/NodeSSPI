@@ -1,5 +1,4 @@
-#include <node.h>
-#include <v8.h>
+#include "NodeSSPI.h"
 
 using namespace v8;
 
@@ -13,4 +12,4 @@ void init(Handle<Object> exports) {
 		FunctionTemplate::New(Method)->GetFunction());
 }
 
-NODE_MODULE(hello, init)
+NODE_MODULE(nodeSSPI, init)
