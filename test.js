@@ -1,3 +1,4 @@
-var addon = require('./bin/win32-x64/nodeSSPI');
+var addon = require('./index.js');
 
-console.log(addon.hello()); // 'world'
+var newaddOn = new addon({name: 'hello'});
+newaddOn.sayHello(); 
