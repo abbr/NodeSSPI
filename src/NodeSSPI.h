@@ -1,5 +1,4 @@
-#ifndef _MOD_AUTH_SSPI_H_
-#define _MOD_AUTH_SSPI_H_
+#pragma once
 
 #define SECURITY_WIN32 1
 #include <node.h>
@@ -11,4 +10,3 @@
 #include <sspi.h>
 #include <security.h>
 
-#endif /* ndef _MOD_AUTH_SSPI_H_ */
