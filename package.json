@@ -5,16 +5,20 @@
   "main": "index.js",
   "author": "Fred Wen<wenfred@gmail.com>",
   "license": "MIT",
-	"scripts": {
-		"install": "node ./build.js"
-	},
+  "scripts": {
+    "install": "node ./build.js"
+  },
   "dependencies": {
     "bindings": "~1.1.1"
   },
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/abbr/nodesspi.git"
-	},
-	"homepage": "https://github.com/abbr/nodesspi",
-	"keywords": ["SSPI", "authentication"]
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "os": ["win32"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abbr/nodesspi.git"
+  },
+  "homepage": "https://github.com/abbr/nodesspi",
+  "keywords": ["SSPI", "authentication"]
 }
