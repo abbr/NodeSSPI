@@ -10,12 +10,24 @@ try {
 	binding = require('bindings')('nodeSSPI');
 }
 
+/*
+  opts:{
+    offerSSPI: true|false,
+    offerBasic: true|false,
+    basicPreferred: true|false,
+    // domain used by basic authentication
+    domain: <string>,
+    omitDomain: true|false,
+    usernameCase: 'lower'|'upper',
+    perRequestAuth: true|false,
+  }
+*/
 function main(opts) {
   this.opts = opts;
 }
 
 main.prototype.sayHello = function(){
-  console.log(this.opts.name + " " +  binding.hello());
+  return this.opts.name + " " +  binding.hello();
 }
 
 module.exports = main;
