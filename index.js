@@ -26,14 +26,16 @@ try {
 */
 function main(opts) {
   // defaults
-  opts.__proto__.offerSSPI = true;
-  opts.__proto__.offerBasic = true;
-  opts.__proto__.basicPreferred = false;
-  opts.__proto__.authoritative = true;
-  opts.__proto__.omitDomain = false;
-  opts.__proto__.usernameCase = 'lower';
-  opts.__proto__.perRequestAuth = true;
-
+  var defaultOpts = {
+    offerSSPI: true,
+    offerBasic: true,
+    basicPreferred: false,
+    authoritative: true,
+    omitDomain: false,
+    usernameCase: 'lower',
+    perRequestAuth: true
+  };
+  opts.__proto__ = defaultOpts;
   this.opts = opts;
 }
 
