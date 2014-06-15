@@ -21,7 +21,6 @@ try {
     perRequestAuth: true|false,
     domain: <string>, // used by basic authentication
     omitDomain: false|true,
-    userHeader: <string>, // HTTP header authenticated user name is populated to
   }
 */
 function main(opts) {
@@ -40,7 +39,7 @@ function main(opts) {
 }
 
 main.prototype.authenticate = function (req, res, next) {
-  if (!this.opts.authoritative || req.statusCode === 200) {
+  if (!this.opts.authoritative || req.user !== undefined) {
     next();
   } else {
     res.end();
