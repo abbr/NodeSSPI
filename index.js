@@ -39,6 +39,7 @@ function main(opts) {
 }
 
 main.prototype.authenticate = function (req, res, next) {
+  var ret = binding.authenticate(req);
   if (!this.opts.authoritative || req.user !== undefined) {
     next();
   } else {

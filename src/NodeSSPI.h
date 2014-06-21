@@ -5,8 +5,8 @@
 #include <v8.h>
 
 /* System headers */
-#include <windows.h>
-#include <winsock2.h>
+#include <iostream>
+//#include <windows.h>
+//#include <winsock2.h>
 #include <sspi.h>
-#include <security.h>
-
+//#include <security.h>
