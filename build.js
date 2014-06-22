@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 var cp = require('child_process'),
 	fs = require('fs'),
 	path = require('path');
