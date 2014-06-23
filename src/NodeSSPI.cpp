@@ -3,7 +3,18 @@
 using namespace v8;
 using namespace std;
 
-sspi_module_rec sspiModuleInfo = {0,};
+sspi_module_rec sspiModuleInfo = { 0, };
+
+
+void sspi_module_cleanup()
+{
+	if (sspiModuleInfo.securityDLL != NULL) {
+		if (sspiModuleInfo.functable != NULL) {
+			sspiModuleInfo.functable->FreeContextBuffer(sspiModuleInfo.pkgInfo);
+		}
+		FreeLibrary(sspiModuleInfo.securityDLL);
+	}
+}
 
 void init_module()
 {
@@ -15,20 +26,14 @@ void init_module()
 		sspiModuleInfo.supportsSSPI = TRUE;
 		sspiModuleInfo.defaultPackage = DEFAULT_SSPI_PACKAGE;
 		__try {
-			if (!(sspiModuleInfo.securityDLL = LoadLibrary(lpDllName))) {
-				throw "Error Loading Security DLL";
-			}
-
-			if (!(pInit = (INIT_SECURITY_INTERFACE) GetProcAddress(sspiModuleInfo.securityDLL, SECURITY_ENTRYPOINT))) {
-				throw "Error calling GetProcAddress";
-			}
-
-			if (!(sspiModuleInfo.functable = pInit())) {
-				throw "Error getting functable";
-			}
+			sspiModuleInfo.securityDLL = LoadLibrary(lpDllName);
+			pInit = (INIT_SECURITY_INTERFACE)GetProcAddress(sspiModuleInfo.securityDLL, SECURITY_ENTRYPOINT);
+			sspiModuleInfo.functable = pInit();
 			ss = sspiModuleInfo.functable->EnumerateSecurityPackages(&sspiModuleInfo.numPackages, &sspiModuleInfo.pkgInfo);
-		} __finally {
+		}
+		__finally {
 			if (ss != SEC_E_OK) {
+				sspi_module_cleanup();
 				sspiModuleInfo.supportsSSPI = FALSE;
 			}
 		}
