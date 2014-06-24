@@ -39,7 +39,10 @@ function main(opts) {
 }
 
 main.prototype.authenticate = function (req, res, next) {
-  var ret = binding.authenticate(req);
+  var ret = binding.authenticate(req, this.opts.offerSSPI, this.opts.offerBasic, this.opts.basicPreferred);
+  if (!isNaN(ret) && ret > 0) {
+    res.statusCode = ret;
+  }
   if (!this.opts.authoritative || req.user !== undefined) {
     next();
   } else {
