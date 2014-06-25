@@ -18,7 +18,7 @@ try {
     basicPreferred: false|true,
     authoritative: true|false,
     usernameCase: 'lower'|'upper',
-    perRequestAuth: true|false,
+    perRequestAuth: false|true,
     domain: <string>, // used by basic authentication
     omitDomain: false|true,
   }
@@ -32,18 +32,25 @@ function main(opts) {
     authoritative: true,
     omitDomain: false,
     usernameCase: 'lower',
-    perRequestAuth: true
+    perRequestAuth: false
   };
   opts.__proto__ = defaultOpts;
   this.opts = opts;
 }
 
 main.prototype.authenticate = function (req, res, next) {
-  var ret = binding.authenticate(req, this.opts.offerSSPI, this.opts.offerBasic, this.opts.basicPreferred);
-  if (!isNaN(ret) && ret > 0) {
-    res.statusCode = ret;
+  var ret;
+  if (this.opts.perRequestAuth) {
+    delete req.connection.user;
   }
-  if (!this.opts.authoritative || req.user !== undefined) {
+  if (req.connection.user === undefined) {
+    if (req.header('authroization') === undefined) {
+      res.setHeader('WWW-Authenticate', ['NTLM']);
+    } else {
+      ret = binding.authenticate(this.opts, req, res);
+    }
+  }
+  if (!this.opts.authoritative || req.connection.user !== undefined) {
     next();
   } else {
     res.end();
