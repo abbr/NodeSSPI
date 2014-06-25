@@ -24,6 +24,7 @@ try {
   }
 */
 function main(opts) {
+  opts = opts || {};
   // defaults
   var defaultOpts = {
     offerSSPI: true,
@@ -44,8 +45,9 @@ main.prototype.authenticate = function (req, res, next) {
     delete req.connection.user;
   }
   if (req.connection.user === undefined) {
-    if (req.header('authroization') === undefined) {
-      res.setHeader('WWW-Authenticate', ['NTLM']);
+    if (req.header('authorization') === undefined) {
+      res.statusCode = 401;
+      res.setHeader('WWW-Authenticate', ['NTLM', 'Basic']);
     } else {
       ret = binding.authenticate(this.opts, req, res);
     }
