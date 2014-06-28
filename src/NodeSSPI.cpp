@@ -39,11 +39,7 @@ void init_module()
 
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
-	TryCatch trycatch;
-	if (args[0]->IsObject()){
-		auto req = args[0]->ToObject();
-		req->Set(String::New("user"), String::New("Fred"));
-	}
+	auto aut = std::string(*String::Utf8Value(args[1]->ToObject()->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 	if (sspiModuleInfo.supportsSSPI == FALSE) {
 		return scope.Close(Integer::New(500));
 	}

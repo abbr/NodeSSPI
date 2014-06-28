@@ -5,6 +5,7 @@
 #include <v8.h>
 
 /* System headers */
+#include <string>
 #include <iostream>
 //#include <windows.h>
 //#include <winsock2.h>
