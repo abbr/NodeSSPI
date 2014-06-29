@@ -37,15 +37,19 @@ void init_module()
 	}
 }
 
+/*
+* args[0]: opts
+* args[1]: req
+* args[2]: res
+*/
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
 	auto req = args[1]->ToObject();
 	req->Set(String::New("user"), String::New("Fred"));
 	auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 	if (sspiModuleInfo.supportsSSPI == FALSE) {
-		return scope.Close(Integer::New(500));
+		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
 	}
-
 	return scope.Close(Undefined());
 }
 

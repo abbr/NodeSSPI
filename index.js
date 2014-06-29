@@ -40,7 +40,6 @@ function main(opts) {
 }
 
 main.prototype.authenticate = function (req, res, next) {
-  var ret;
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
@@ -49,7 +48,7 @@ main.prototype.authenticate = function (req, res, next) {
       res.statusCode = 401;
       res.setHeader('WWW-Authenticate', ['NTLM', 'Basic']);
     } else {
-      ret = binding.authenticate(this.opts, req, res);
+      binding.authenticate(this.opts, req, res);
     }
   }
   if (!this.opts.authoritative || req.connection.user !== undefined) {
