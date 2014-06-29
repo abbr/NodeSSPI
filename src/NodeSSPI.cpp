@@ -44,17 +44,29 @@ void init_module()
 */
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
-	if (sspiModuleInfo.supportsSSPI == FALSE) {
-		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
-		return scope.Close(Undefined());
+	BYTE* pToken ;
+	try{
+		if (sspiModuleInfo.supportsSSPI == FALSE) {
+			throw new std::exception();
+		}
+		auto req = args[1]->ToObject();
+		auto aut = std::string(*String::AsciiValue(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
+		stringstream ssin(aut);
+		std::string schema, strToken;
+		ssin >> schema;
+		ssin >> strToken;
+		// base64 decode strToken
+		pToken = static_cast<BYTE*>(malloc(strToken.length()));
+		int sz = strToken.length();
+		if(!Base64Decode(strToken.c_str(), strToken.length(),pToken,&sz)){
+			throw new std::exception();
+		};
+		req->Set(String::New("user"), String::New("Fred"));
 	}
-	auto req = args[1]->ToObject();
-	auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
-	stringstream ssin(aut);
-	std::string schema, token;
-	ssin >> schema;
-	ssin >> token;
-	req->Set(String::New("user"), String::New("Fred"));
+	catch(...){
+		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
+	}
+	free(pToken);
 	return scope.Close(Undefined());
 }
 

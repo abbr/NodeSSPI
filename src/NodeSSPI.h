@@ -8,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <atlenc.h>
 //#include <windows.h>
 //#include <winsock2.h>
 #include <sspi.h>
