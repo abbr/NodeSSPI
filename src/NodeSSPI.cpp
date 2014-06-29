@@ -44,12 +44,17 @@ void init_module()
 */
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
-	auto req = args[1]->ToObject();
-	req->Set(String::New("user"), String::New("Fred"));
-	auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 	if (sspiModuleInfo.supportsSSPI == FALSE) {
 		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
+		return scope.Close(Undefined());
 	}
+	auto req = args[1]->ToObject();
+	auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
+	stringstream ssin(aut);
+	std::string schema, token;
+	ssin >> schema;
+	ssin >> token;
+	req->Set(String::New("user"), String::New("Fred"));
 	return scope.Close(Undefined());
 }
 
