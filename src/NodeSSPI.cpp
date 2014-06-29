@@ -50,7 +50,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			throw new std::exception();
 		}
 		auto req = args[1]->ToObject();
-		auto aut = std::string(*String::AsciiValue(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
+		auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
@@ -58,9 +58,17 @@ Handle<Value> Authenticate(const Arguments& args) {
 		// base64 decode strToken
 		pToken = static_cast<BYTE*>(malloc(strToken.length()));
 		int sz = strToken.length();
-		if(!Base64Decode(strToken.c_str(), strToken.length(),pToken,&sz)){
+		if(!Base64Decode(strToken.c_str(), strToken.length(), pToken, &sz)){
 			throw new std::exception();
 		};
+		// get max token size defined by SSPI package
+		int maxTokSz = -1;
+		for(ULONG i =0 ;i< sspiModuleInfo.numPackages;i++ ){
+			if(!schema.compare(sspiModuleInfo.pkgInfo[i].Name)){
+				maxTokSz = sspiModuleInfo.pkgInfo[i].cbMaxToken;
+				break;
+			}
+		}
 		req->Set(String::New("user"), String::New("Fred"));
 	}
 	catch(...){

@@ -21,7 +21,6 @@
 typedef struct sspi_module_struct {
     BOOL supportsSSPI;
     LPSTR defaultPackage;
-    LPOSVERSIONINFO lpVersionInformation;
     char userDataKeyString[UUID_STRING_LEN];
     HMODULE securityDLL;
     SecurityFunctionTable *functable;
