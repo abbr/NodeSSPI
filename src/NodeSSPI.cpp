@@ -47,19 +47,19 @@ Handle<Value> Authenticate(const Arguments& args) {
 	BYTE* pToken ;
 	try{
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
-			throw new std::exception();
+			throw std::exception("Doesn't suport SSPI.");
 		}
 		auto req = args[1]->ToObject();
-		auto aut = std::string(*String::Utf8Value(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
+		auto aut = std::string(*String::AsciiValue(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
 		ssin >> strToken;
 		// base64 decode strToken
-		pToken = static_cast<BYTE*>(malloc(strToken.length()));
+		unique_ptr<BYTE[]> pToken(new BYTE[strToken.length()]);
 		int sz = strToken.length();
-		if(!Base64Decode(strToken.c_str(), strToken.length(), pToken, &sz)){
-			throw new std::exception();
+		if(!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
+			throw std::exception("Cannot decode authorization field.");
 		};
 		// get max token size defined by SSPI package
 		int maxTokSz = -1;
@@ -69,12 +69,16 @@ Handle<Value> Authenticate(const Arguments& args) {
 				break;
 			}
 		}
+		if(maxTokSz < 0){
+			throw std::exception(("No " +schema+ " SSPI package.").c_str());
+		}
 		req->Set(String::New("user"), String::New("Fred"));
 	}
-	catch(...){
+	catch(std::exception& ex){
 		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
+		// throw exception to js land
+		return v8::ThrowException(v8::String::New(ex.what()));
 	}
-	free(pToken);
 	return scope.Close(Undefined());
 }
 
