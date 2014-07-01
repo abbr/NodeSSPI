@@ -10,6 +10,7 @@
 #include <sstream>
 #include <atlenc.h>
 #include <memory>
+#include <map>
 //#include <windows.h>
 //#include <winsock2.h>
 #include <sspi.h>
@@ -19,13 +20,17 @@
 #define DEFAULT_SSPI_PACKAGE "NTLM"
 #define UUID_STRING_LEN 64
 
-typedef struct sspi_module_struct {
-    BOOL supportsSSPI;
-    LPSTR defaultPackage;
-    char userDataKeyString[UUID_STRING_LEN];
-    HMODULE securityDLL;
-    SecurityFunctionTable *functable;
-    ULONG numPackages;
-    PSecPkgInfo pkgInfo;
+typedef struct {
+	BOOL supportsSSPI;
+	LPSTR defaultPackage;
+	char userDataKeyString[UUID_STRING_LEN];
+	HMODULE securityDLL;
+	SecurityFunctionTable *functable;
+	ULONG numPackages;
+	PSecPkgInfo pkgInfo;
 } sspi_module_rec;
 
+typedef struct {
+	CredHandle credHandl;
+	TimeStamp exp;
+} credHandleRec;

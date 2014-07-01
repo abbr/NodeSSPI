@@ -5,6 +5,7 @@ using namespace std;
 
 sspi_module_rec sspiModuleInfo = { 0, };
 
+std::map<std::string,credHandleRec> credMap;
 
 void sspi_module_cleanup()
 {
@@ -71,6 +72,32 @@ Handle<Value> Authenticate(const Arguments& args) {
 		}
 		if(maxTokSz < 0){
 			throw std::exception(("No " +schema+ " SSPI package.").c_str());
+		}
+		// acquire server credential
+		if(credMap.find(schema.c_str()) == credMap.end()){
+			credHandleRec temp = {{0,0},0};
+			credMap[schema.c_str()] = temp;
+		}
+		FILETIME ft;
+		SYSTEMTIME st;
+		GetSystemTime(&st); // gets current time
+		SystemTimeToFileTime(&st, &ft); // converts to file time format
+		if(CompareFileTime(&ft,(FILETIME *)(&credMap[schema.c_str()].exp))>0){
+			// cred expired, re-generate
+			if(sspiModuleInfo.functable->AcquireCredentialsHandle(
+				NULL //pszPrincipal
+				,(char*)(schema.c_str()) //pszPackage
+				,SECPKG_CRED_INBOUND //fCredentialUse
+				,NULL // pvLogonID
+				,NULL //pAuthData
+				,NULL //pGetKeyFn
+				,NULL //pvGetKeyArgument
+				,&credMap[schema.c_str()].credHandl //phCredential
+				,&credMap[schema.c_str()].exp //ptsExpiry
+				) != SEC_E_OK){
+					throw std::exception("Cannot get server credential");
+			}
+
 		}
 		req->Set(String::New("user"), String::New("Fred"));
 	}
