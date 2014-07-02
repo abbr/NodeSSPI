@@ -74,15 +74,16 @@ Handle<Value> Authenticate(const Arguments& args) {
 			throw std::exception(("No " +schema+ " SSPI package.").c_str());
 		}
 		// acquire server credential
-		if(credMap.find(schema.c_str()) == credMap.end()){
-			credHandleRec temp = {{0,0},0};
-			credMap[schema.c_str()] = temp;
+		if(credMap.find(schema) == credMap.end()){
+			credHandleRec temp = {0,0};
+			credMap[schema] = temp;
 		}
 		FILETIME ft;
 		SYSTEMTIME st;
 		GetSystemTime(&st); // gets current time
 		SystemTimeToFileTime(&st, &ft); // converts to file time format
-		if(CompareFileTime(&ft,(FILETIME *)(&credMap[schema.c_str()].exp))>0){
+		if(CompareFileTime(&ft,(FILETIME *)(&credMap[schema].exp))>0){
+			sspiModuleInfo.functable->FreeCredentialsHandle(&credMap[schema].credHandl);
 			// cred expired, re-generate
 			if(sspiModuleInfo.functable->AcquireCredentialsHandle(
 				NULL //pszPrincipal
@@ -92,13 +93,14 @@ Handle<Value> Authenticate(const Arguments& args) {
 				,NULL //pAuthData
 				,NULL //pGetKeyFn
 				,NULL //pvGetKeyArgument
-				,&credMap[schema.c_str()].credHandl //phCredential
-				,&credMap[schema.c_str()].exp //ptsExpiry
+				,&credMap[schema].credHandl //phCredential
+				,&credMap[schema].exp //ptsExpiry
 				) != SEC_E_OK){
 					throw std::exception("Cannot get server credential");
 			}
 
 		}
+		// TODO: call AcceptSecurityContext 
 		req->Set(String::New("user"), String::New("Fred"));
 	}
 	catch(std::exception& ex){
