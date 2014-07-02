@@ -63,14 +63,14 @@ Handle<Value> Authenticate(const Arguments& args) {
 			throw std::exception("Cannot decode authorization field.");
 		};
 		// get max token size defined by SSPI package
-		int maxTokSz = -1;
-		for(ULONG i =0 ;i< sspiModuleInfo.numPackages;i++ ){
+		ULONG maxTokSz,i;
+		for(i =0 ;i< sspiModuleInfo.numPackages;i++ ){
 			if(!schema.compare(sspiModuleInfo.pkgInfo[i].Name)){
 				maxTokSz = sspiModuleInfo.pkgInfo[i].cbMaxToken;
 				break;
 			}
 		}
-		if(maxTokSz < 0){
+		if(i == sspiModuleInfo.numPackages){
 			throw std::exception(("No " +schema+ " SSPI package.").c_str());
 		}
 		// acquire server credential
@@ -100,7 +100,35 @@ Handle<Value> Authenticate(const Arguments& args) {
 			}
 
 		}
-		// TODO: call AcceptSecurityContext 
+		// call AcceptSecurityContext 
+		SecBuffer inbuf, outbuf;
+		SecBufferDesc inbufdesc, outbufdesc;
+		outbuf.cbBuffer = maxTokSz;
+		outbuf.BufferType = SECBUFFER_TOKEN;
+		unique_ptr<BYTE[]> pOutBuf(new BYTE[maxTokSz]);
+		outbuf.pvBuffer = pOutBuf.get();
+		outbufdesc.ulVersion = SECBUFFER_VERSION;
+		outbufdesc.cBuffers = 1;
+		outbufdesc.pBuffers = &outbuf;
+
+		inbuf.BufferType = SECBUFFER_TOKEN;
+		inbuf.cbBuffer = sz;
+		inbuf.pvBuffer = pToken.get();
+		inbufdesc.cBuffers = 1;
+		inbufdesc.ulVersion = SECBUFFER_VERSION;
+		inbufdesc.pBuffers = &inbuf;
+
+		sspiModuleInfo.functable->AcceptSecurityContext(
+			&credMap[schema].credHandl	//  _In_opt_     PCredHandle phCredential,
+			,NULL //  _Inout_opt_  PCtxtHandle phContext,
+			,&inbufdesc //  _In_opt_     PSecBufferDesc pInput,
+			,0 //  _In_         ULONG fContextReq,
+			,0 //  _In_         ULONG TargetDataRep,
+			,0 //  _Inout_opt_  PCtxtHandle phNewContext,
+			,&outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
+			,0 //  _Out_        PULONG pfContextAttr,
+			,0 //  _Out_opt_    PTimeStamp ptsTimeStamp
+			);
 		req->Set(String::New("user"), String::New("Fred"));
 	}
 	catch(std::exception& ex){
