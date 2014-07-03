@@ -5,7 +5,7 @@ using namespace std;
 
 sspi_module_rec sspiModuleInfo = { 0, };
 
-std::map<std::string,credHandleRec> credMap;
+std::map<std::string, credHandleRec> credMap;
 
 void sspi_module_cleanup()
 {
@@ -45,12 +45,13 @@ void init_module()
 */
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
-	BYTE* pToken ;
+	BYTE* pToken;
 	try{
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw std::exception("Doesn't suport SSPI.");
 		}
 		auto req = args[1]->ToObject();
+		auto res = args[2]->ToObject();
 		auto aut = std::string(*String::AsciiValue(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
@@ -59,44 +60,44 @@ Handle<Value> Authenticate(const Arguments& args) {
 		// base64 decode strToken
 		unique_ptr<BYTE[]> pToken(new BYTE[strToken.length()]);
 		int sz = strToken.length();
-		if(!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
+		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
 			throw std::exception("Cannot decode authorization field.");
 		};
 		// get max token size defined by SSPI package
-		ULONG maxTokSz,i;
-		for(i =0 ;i< sspiModuleInfo.numPackages;i++ ){
-			if(!schema.compare(sspiModuleInfo.pkgInfo[i].Name)){
+		ULONG maxTokSz, i;
+		for (i = 0; i < sspiModuleInfo.numPackages; i++){
+			if (!schema.compare(sspiModuleInfo.pkgInfo[i].Name)){
 				maxTokSz = sspiModuleInfo.pkgInfo[i].cbMaxToken;
 				break;
 			}
 		}
-		if(i == sspiModuleInfo.numPackages){
-			throw std::exception(("No " +schema+ " SSPI package.").c_str());
+		if (i == sspiModuleInfo.numPackages){
+			throw std::exception(("No " + schema + " SSPI package.").c_str());
 		}
 		// acquire server credential
-		if(credMap.find(schema) == credMap.end()){
-			credHandleRec temp = {0,0};
+		if (credMap.find(schema) == credMap.end()){
+			credHandleRec temp = { 0, 0 };
 			credMap[schema] = temp;
 		}
 		FILETIME ft;
 		SYSTEMTIME st;
 		GetSystemTime(&st); // gets current time
 		SystemTimeToFileTime(&st, &ft); // converts to file time format
-		if(CompareFileTime(&ft,(FILETIME *)(&credMap[schema].exp))>0){
+		if (CompareFileTime(&ft, (FILETIME *)(&credMap[schema].exp)) > 0){
 			sspiModuleInfo.functable->FreeCredentialsHandle(&credMap[schema].credHandl);
 			// cred expired, re-generate
-			if(sspiModuleInfo.functable->AcquireCredentialsHandle(
+			if (sspiModuleInfo.functable->AcquireCredentialsHandle(
 				NULL //pszPrincipal
-				,(char*)(schema.c_str()) //pszPackage
-				,SECPKG_CRED_INBOUND //fCredentialUse
-				,NULL // pvLogonID
-				,NULL //pAuthData
-				,NULL //pGetKeyFn
-				,NULL //pvGetKeyArgument
-				,&credMap[schema].credHandl //phCredential
-				,&credMap[schema].exp //ptsExpiry
+				, (char*)(schema.c_str()) //pszPackage
+				, SECPKG_CRED_INBOUND //fCredentialUse
+				, NULL // pvLogonID
+				, NULL //pAuthData
+				, NULL //pGetKeyFn
+				, NULL //pvGetKeyArgument
+				, &credMap[schema].credHandl //phCredential
+				, &credMap[schema].exp //ptsExpiry
 				) != SEC_E_OK){
-					throw std::exception("Cannot get server credential");
+				throw std::exception("Cannot get server credential");
 			}
 
 		}
@@ -105,10 +106,10 @@ Handle<Value> Authenticate(const Arguments& args) {
 		PCtxtHandle inPch = 0, outPch = 0;
 		PTimeStamp pTS;
 		auto conn = req->Get(String::New("connection"))->ToObject();
-		if(conn->HasOwnProperty(String::New("svrCtx"))){
+		if (conn->HasOwnProperty(String::New("svrCtx"))){
 			// this is not initial request
 			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
-			pSCR  = static_cast<sspi_connection_rec *>(wrap->Value());
+			pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
 			inPch = outPch = &pSCR->server_context;
 		}
 		else{
@@ -118,7 +119,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			svrCtx_templ->SetInternalFieldCount(1);
 			Local<Object> obj = svrCtx_templ->NewInstance();
 			obj->SetInternalField(0, External::New(outPch));
-			conn->Set(String::New("svrCtx"),obj);
+			conn->Set(String::New("svrCtx"), obj);
 		}
 		pTS = &pSCR->server_ctxtexpiry;
 		// call AcceptSecurityContext 
@@ -143,19 +144,66 @@ Handle<Value> Authenticate(const Arguments& args) {
 		SECURITY_STATUS ss;
 		ss = sspiModuleInfo.functable->AcceptSecurityContext(
 			&credMap[schema].credHandl	//  _In_opt_     PCredHandle phCredential,
-			,inPch //  _Inout_opt_  PCtxtHandle phContext,
-			,&inbufdesc //  _In_opt_     PSecBufferDesc pInput,
-			,ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
-			,SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
-			,outPch //  _Inout_opt_  PCtxtHandle phNewContext,
-			,&outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
-			,&ContextAttributes //  _Out_        PULONG pfContextAttr,
-			,pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
+			, inPch //  _Inout_opt_  PCtxtHandle phContext,
+			, &inbufdesc //  _In_opt_     PSecBufferDesc pInput,
+			, ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
+			, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
+			, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
+			, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
+			, &ContextAttributes //  _Out_        PULONG pfContextAttr,
+			, pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
 			);
+		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
+			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
+		}
+
+		switch (ss) {
+		case SEC_I_COMPLETE_NEEDED:
+		case SEC_I_CONTINUE_NEEDED:
+		case SEC_I_COMPLETE_AND_CONTINUE: /* already completed if 'complete and continue' */
+			//note_sspi_auth_challenge(ctx,
+			//	uuencode_binary(ctx->r->pool, hdrout.Password, hdrout.PasswordLength));
+			//return HTTP_UNAUTHORIZED;
+			res->Set(String::New("statusCode"), Integer::New(401));
+			break;
+		case SEC_E_INVALID_TOKEN:
+			//log_sspi_invalid_token(ctx->r, &ctx->hdr, APR_FROM_OS_ERROR(GetLastError()));
+			//ctx->scr->sspi_failing = 1;
+			//ctx->scr->package = 0;
+			//note_sspi_auth_failure(ctx->r);
+			//cleanup_sspi_connection(ctx->scr);
+			//return HTTP_UNAUTHORIZED;
+			res->Set(String::New("statusCode"), Integer::New(401));
+			break;
+
+		case SEC_E_LOGON_DENIED:
+			//log_sspi_logon_denied(ctx->r, &ctx->hdr, APR_FROM_OS_ERROR(GetLastError()));
+			//ctx->scr->sspi_failing = 1;
+			//ctx->scr->package = 0;
+			//note_sspi_auth_failure(ctx->r);
+			//cleanup_sspi_connection(ctx->scr);
+			//return HTTP_UNAUTHORIZED;
+			res->Set(String::New("statusCode"), Integer::New(401));
+			break;
+
+		case SEC_E_INVALID_HANDLE:
+		case SEC_E_INTERNAL_ERROR:
+		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
+		case SEC_E_INSUFFICIENT_MEMORY:
+			//ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_FROM_OS_ERROR(GetLastError()), ctx->r,
+			//	"access to %s failed, reason: cannot generate server context", ctx->r->uri);
+			//return HTTP_INTERNAL_SERVER_ERROR;
+			res->Set(String::New("statusCode"), Integer::New(500));
+			break;
+		case SEC_E_OK:
+			//return OK;
+			break;
+		}
+
 		req->Set(String::New("user"), String::New("Fred"));
 	}
-	catch(std::exception& ex){
-		args[2]->ToObject()->Set(String::New("statusCode"),Integer::New(500));
+	catch (std::exception& ex){
+		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(500));
 		// throw exception to js land
 		return v8::ThrowException(v8::String::New(ex.what()));
 	}
