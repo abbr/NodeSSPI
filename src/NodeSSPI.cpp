@@ -102,7 +102,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 		}
 		// acquire server context from request.connection
 		PCtxtHandle inPch = 0, outPch = 0;
-		auto conn = req->Get(String::New("headers"))->ToObject();
+		auto conn = req->Get(String::New("connection"))->ToObject();
 		if(conn->HasOwnProperty(String::New("svrCtx"))){
 			// this is not initial request
 			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
@@ -114,6 +114,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			svrCtx_templ->SetInternalFieldCount(1);
 			Local<Object> obj = svrCtx_templ->NewInstance();
 			obj->SetInternalField(0, External::New(outPch));
+			conn->Set(String::New("svrCtx"),obj);
 		}
 		// call AcceptSecurityContext 
 		SecBuffer inbuf, outbuf;
