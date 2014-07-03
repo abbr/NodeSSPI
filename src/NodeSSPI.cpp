@@ -101,21 +101,26 @@ Handle<Value> Authenticate(const Arguments& args) {
 
 		}
 		// acquire server context from request.connection
+		sspi_connection_rec *pSCR = 0;
 		PCtxtHandle inPch = 0, outPch = 0;
+		PTimeStamp pTS;
 		auto conn = req->Get(String::New("connection"))->ToObject();
 		if(conn->HasOwnProperty(String::New("svrCtx"))){
 			// this is not initial request
 			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
-			inPch = outPch = static_cast<PCtxtHandle>(wrap->Value());
+			pSCR  = static_cast<sspi_connection_rec *>(wrap->Value());
+			inPch = outPch = &pSCR->server_context;
 		}
 		else{
-			outPch = static_cast<PCtxtHandle>(malloc(sizeof(CtxtHandle)));
+			pSCR = static_cast<sspi_connection_rec *>(malloc(sizeof(sspi_connection_rec)));
+			outPch = &pSCR->server_context;
 			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
 			svrCtx_templ->SetInternalFieldCount(1);
 			Local<Object> obj = svrCtx_templ->NewInstance();
 			obj->SetInternalField(0, External::New(outPch));
 			conn->Set(String::New("svrCtx"),obj);
 		}
+		pTS = &pSCR->server_ctxtexpiry;
 		// call AcceptSecurityContext 
 		SecBuffer inbuf, outbuf;
 		SecBufferDesc inbufdesc, outbufdesc;
@@ -133,8 +138,10 @@ Handle<Value> Authenticate(const Arguments& args) {
 		inbufdesc.cBuffers = 1;
 		inbufdesc.ulVersion = SECBUFFER_VERSION;
 		inbufdesc.pBuffers = &inbuf;
+		ULONG ContextAttributes;
 
-		sspiModuleInfo.functable->AcceptSecurityContext(
+		SECURITY_STATUS ss;
+		ss = sspiModuleInfo.functable->AcceptSecurityContext(
 			&credMap[schema].credHandl	//  _In_opt_     PCredHandle phCredential,
 			,inPch //  _Inout_opt_  PCtxtHandle phContext,
 			,&inbufdesc //  _In_opt_     PSecBufferDesc pInput,
@@ -142,8 +149,8 @@ Handle<Value> Authenticate(const Arguments& args) {
 			,SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
 			,outPch //  _Inout_opt_  PCtxtHandle phNewContext,
 			,&outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
-			,0 //  _Out_        PULONG pfContextAttr,
-			,0 //  _Out_opt_    PTimeStamp ptsTimeStamp
+			,&ContextAttributes //  _Out_        PULONG pfContextAttr,
+			,pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
 			);
 		req->Set(String::New("user"), String::New("Fred"));
 	}

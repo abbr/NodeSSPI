@@ -34,3 +34,9 @@ typedef struct {
 	CredHandle credHandl;
 	TimeStamp exp;
 } credHandleRec;
+
+typedef struct {
+    /* Server context */
+    CtxtHandle server_context;
+    TimeStamp server_ctxtexpiry;
+} sspi_connection_rec;
