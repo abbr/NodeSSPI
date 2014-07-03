@@ -100,6 +100,21 @@ Handle<Value> Authenticate(const Arguments& args) {
 			}
 
 		}
+		// acquire server context from request.connection
+		PCtxtHandle inPch = 0, outPch = 0;
+		auto conn = req->Get(String::New("headers"))->ToObject();
+		if(conn->HasOwnProperty(String::New("svrCtx"))){
+			// this is not initial request
+			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
+			inPch = outPch = static_cast<PCtxtHandle>(wrap->Value());
+		}
+		else{
+			outPch = static_cast<PCtxtHandle>(malloc(sizeof(CtxtHandle)));
+			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
+			svrCtx_templ->SetInternalFieldCount(1);
+			Local<Object> obj = svrCtx_templ->NewInstance();
+			obj->SetInternalField(0, External::New(outPch));
+		}
 		// call AcceptSecurityContext 
 		SecBuffer inbuf, outbuf;
 		SecBufferDesc inbufdesc, outbufdesc;
@@ -120,11 +135,11 @@ Handle<Value> Authenticate(const Arguments& args) {
 
 		sspiModuleInfo.functable->AcceptSecurityContext(
 			&credMap[schema].credHandl	//  _In_opt_     PCredHandle phCredential,
-			,NULL //  _Inout_opt_  PCtxtHandle phContext,
+			,inPch //  _Inout_opt_  PCtxtHandle phContext,
 			,&inbufdesc //  _In_opt_     PSecBufferDesc pInput,
-			,0 //  _In_         ULONG fContextReq,
-			,0 //  _In_         ULONG TargetDataRep,
-			,0 //  _Inout_opt_  PCtxtHandle phNewContext,
+			,ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
+			,SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
+			,outPch //  _Inout_opt_  PCtxtHandle phNewContext,
 			,&outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
 			,0 //  _Out_        PULONG pfContextAttr,
 			,0 //  _Out_opt_    PTimeStamp ptsTimeStamp
