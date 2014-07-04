@@ -21,6 +21,7 @@ try {
     perRequestAuth: false|true,
     domain: <string>, // used by basic authentication
     omitDomain: false|true,
+    sspiPackagesUsed: ['NTLM'] // SSPI packages used
   }
 */
 function main(opts) {
@@ -33,7 +34,8 @@ function main(opts) {
     authoritative: true,
     omitDomain: false,
     usernameCase: 'lower',
-    perRequestAuth: false
+    perRequestAuth: false,
+    sspiPackagesUsed: ['NTLM']
   };
   opts.__proto__ = defaultOpts;
   this.opts = opts;
@@ -43,13 +45,11 @@ main.prototype.authenticate = function (req, res, next) {
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
-  if (req.connection.user === undefined) {
-    if (req.header('authorization') === undefined) {
-      res.statusCode = 401;
-      res.setHeader('WWW-Authenticate', ['NTLM', 'Basic']);
-    } else {
-      binding.authenticate(this.opts, req, res);
-    }
+  try {
+    binding.authenticate(this.opts, req, res);
+  } catch (ex) {
+    res.statusCode = 500;
+    res.end();
   }
   if (!this.opts.authoritative || req.connection.user !== undefined) {
     next();

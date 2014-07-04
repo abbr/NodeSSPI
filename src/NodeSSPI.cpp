@@ -50,9 +50,46 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw std::exception("Doesn't suport SSPI.");
 		}
+		auto opts = args[0]->ToObject();
 		auto req = args[1]->ToObject();
 		auto res = args[2]->ToObject();
-		auto aut = std::string(*String::AsciiValue(req->Get(String::New("headers"))->ToObject()->Get(String::New("authorization"))));
+		auto headers = req->Get(String::New("headers"))->ToObject(); 
+		auto conn = req->Get(String::New("connection"))->ToObject();
+		if(conn->HasOwnProperty(String::New("user"))){
+			return scope.Close(Undefined());
+		}
+		if(!headers->Has(String::New("authorization"))){
+			int nWays = 0;
+			int nSSPIPkgs = 0;
+			bool offerBasic = false, offerSSPI = false;
+			if(opts->Get(String::New("offerBasic"))->BooleanValue()){
+				offerBasic = true;
+				nWays += 1;
+			}
+			if(opts->Get(String::New("offerSSPI"))->BooleanValue()){
+				offerSSPI = true;
+				nSSPIPkgs = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(String::New("length"))->ToInteger()->Uint32Value();
+				nWays += nSSPIPkgs;
+			}
+			auto authHArr = v8::Array::New(nWays);
+			int curIdx = 0;
+			if(offerBasic && opts->Get(String::New("basicPreferred"))->BooleanValue()){
+				authHArr->Set(curIdx++, String::New("Basic realm=\"\""));
+			}
+			if(offerSSPI){
+				for(int i =0;i<nSSPIPkgs;i++){
+					authHArr->Set(curIdx++,opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(i));
+				}
+			}
+			if(offerBasic && !opts->Get(String::New("basicPreferred"))->BooleanValue()){
+				authHArr->Set(curIdx++, String::New("Basic realm=\"\""));
+			}
+			Handle<Value> argv[] = { String::New("WWW-Authenticate"), authHArr };
+			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+			res->Set(String::New("statusCode"),Integer::New(401));
+			return scope.Close(Undefined());
+		}
+		auto aut = std::string(*String::AsciiValue(headers->Get(String::New("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
@@ -97,7 +134,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 				, &credMap[schema].credHandl //phCredential
 				, &credMap[schema].exp //ptsExpiry
 				) != SEC_E_OK){
-				throw std::exception("Cannot get server credential");
+					throw std::exception("Cannot get server credential");
 			}
 
 		}
@@ -105,7 +142,6 @@ Handle<Value> Authenticate(const Arguments& args) {
 		sspi_connection_rec *pSCR = 0;
 		PCtxtHandle inPch = 0, outPch = 0;
 		PTimeStamp pTS;
-		auto conn = req->Get(String::New("connection"))->ToObject();
 		if (conn->HasOwnProperty(String::New("svrCtx"))){
 			// this is not initial request
 			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
@@ -173,7 +209,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
 			res->Set(String::New("statusCode"), Integer::New(401));
 			break;
-		}
+										  }
 		case SEC_E_INVALID_TOKEN:
 			//log_sspi_invalid_token(ctx->r, &ctx->hdr, APR_FROM_OS_ERROR(GetLastError()));
 			//ctx->scr->sspi_failing = 1;
@@ -207,7 +243,6 @@ Handle<Value> Authenticate(const Arguments& args) {
 			//return OK;
 			break;
 		}
-
 		req->Set(String::New("user"), String::New("Fred"));
 	}
 	catch (std::exception& ex){
