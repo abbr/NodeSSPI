@@ -23,3 +23,5 @@
 build/
 bin/
 src/Debug/
+
+node_modules/

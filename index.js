@@ -15,7 +15,6 @@ try {
   opts:{
     offerSSPI: true|false,
     offerBasic: true|false,
-    basicPreferred: false|true,
     authoritative: true|false,
     usernameCase: 'lower'|'upper',
     perRequestAuth: false|true,
@@ -30,7 +29,6 @@ function main(opts) {
   var defaultOpts = {
     offerSSPI: true,
     offerBasic: true,
-    basicPreferred: false,
     authoritative: true,
     omitDomain: false,
     usernameCase: 'lower',

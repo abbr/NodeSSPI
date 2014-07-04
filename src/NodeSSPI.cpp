@@ -38,6 +38,39 @@ void init_module()
 	}
 }
 
+void note_sspi_auth_failure(Local<Object> opts,Local<Object> req,Local<Object> res){
+	int nWays = 0;
+	int nSSPIPkgs = 0;
+	bool offerBasic = false, offerSSPI = false;
+	if(opts->Get(String::New("offerBasic"))->BooleanValue()){
+		offerBasic = true;
+		nWays += 1;
+	}
+	if(opts->Get(String::New("offerSSPI"))->BooleanValue()){
+		offerSSPI = true;
+		nSSPIPkgs = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(String::New("length"))->ToInteger()->Uint32Value();
+		nWays += nSSPIPkgs;
+	}
+	auto authHArr = v8::Array::New(nWays);
+	int curIdx = 0;
+	if(offerBasic){
+		std::string basicStr("Basic");
+		if(opts->Has(String::New("domain"))){
+			basicStr += " realm=\"";
+			basicStr += std::string(*String::AsciiValue(opts->Get(String::New("domain"))));
+			basicStr += "\"";
+		}
+		authHArr->Set(curIdx++, String::New(basicStr.c_str()));
+	}
+	if(offerSSPI){
+		for(int i =0;i<nSSPIPkgs;i++){
+			authHArr->Set(curIdx++,opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(i));
+		}
+	}
+	Handle<Value> argv[] = { String::New("WWW-Authenticate"), authHArr };
+	res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+	res->Set(String::New("statusCode"),Integer::New(401));
+}
 /*
 * args[0]: opts
 * args[1]: req
@@ -59,34 +92,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			return scope.Close(Undefined());
 		}
 		if(!headers->Has(String::New("authorization"))){
-			int nWays = 0;
-			int nSSPIPkgs = 0;
-			bool offerBasic = false, offerSSPI = false;
-			if(opts->Get(String::New("offerBasic"))->BooleanValue()){
-				offerBasic = true;
-				nWays += 1;
-			}
-			if(opts->Get(String::New("offerSSPI"))->BooleanValue()){
-				offerSSPI = true;
-				nSSPIPkgs = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(String::New("length"))->ToInteger()->Uint32Value();
-				nWays += nSSPIPkgs;
-			}
-			auto authHArr = v8::Array::New(nWays);
-			int curIdx = 0;
-			if(offerBasic && opts->Get(String::New("basicPreferred"))->BooleanValue()){
-				authHArr->Set(curIdx++, String::New("Basic realm=\"\""));
-			}
-			if(offerSSPI){
-				for(int i =0;i<nSSPIPkgs;i++){
-					authHArr->Set(curIdx++,opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(i));
-				}
-			}
-			if(offerBasic && !opts->Get(String::New("basicPreferred"))->BooleanValue()){
-				authHArr->Set(curIdx++, String::New("Basic realm=\"\""));
-			}
-			Handle<Value> argv[] = { String::New("WWW-Authenticate"), authHArr };
-			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
-			res->Set(String::New("statusCode"),Integer::New(401));
+			note_sspi_auth_failure(opts,req,res);
 			return scope.Close(Undefined());
 		}
 		auto aut = std::string(*String::AsciiValue(headers->Get(String::New("authorization"))));
@@ -217,6 +223,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			//note_sspi_auth_failure(ctx->r);
 			//cleanup_sspi_connection(ctx->scr);
 			//return HTTP_UNAUTHORIZED;
+			note_sspi_auth_failure(opts,req,res);
 			res->Set(String::New("statusCode"), Integer::New(401));
 			break;
 
