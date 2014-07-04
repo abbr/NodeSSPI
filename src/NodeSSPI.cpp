@@ -251,8 +251,21 @@ Handle<Value> Authenticate(const Arguments& args) {
 				break;
 			}
 		case SEC_E_OK:
-			//return OK;
-			break;
+			{
+				// get user name
+				SecPkgContext_Names names;
+				SECURITY_STATUS ss;
+				char *retval = NULL;
+
+				if ((ss = sspiModuleInfo.functable->QueryContextAttributes(outPch, 
+					SECPKG_ATTR_NAMES, 
+					&names)
+					) == SEC_E_OK) {
+						conn->Set(String::New("user"),String::New(names.sUserName));
+						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+				}
+				break;
+			}
 		}
 	}
 	catch (std::exception& ex){
