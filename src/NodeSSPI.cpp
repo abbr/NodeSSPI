@@ -95,6 +95,7 @@ void cleanup_sspi_connection(Local<Object> conn)
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
 	BYTE* pToken;
+	Local<Object> conn;
 	try{
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw std::exception("Doesn't suport SSPI.");
@@ -103,7 +104,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 		auto req = args[1]->ToObject();
 		auto res = args[2]->ToObject();
 		auto headers = req->Get(String::New("headers"))->ToObject(); 
-		auto conn = req->Get(String::New("connection"))->ToObject();
+		conn = req->Get(String::New("connection"))->ToObject();
 		if(conn->HasOwnProperty(String::New("user"))){
 			return scope.Close(Undefined());
 		}
@@ -273,12 +274,17 @@ Handle<Value> Authenticate(const Arguments& args) {
 					) == SEC_E_OK) {
 						conn->Set(String::New("user"),String::New(names.sUserName));
 						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+						cleanup_sspi_connection(conn);
+				}
+				else{
+					throw std::exception("Cannot obtain user name.");
 				}
 				break;
 			}
 		}
 	}
 	catch (std::exception& ex){
+		cleanup_sspi_connection(conn);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(500));
 		// throw exception to js land
 		return v8::ThrowException(v8::String::New(ex.what()));
