@@ -160,12 +160,20 @@ Handle<Value> Authenticate(const Arguments& args) {
 		switch (ss) {
 		case SEC_I_COMPLETE_NEEDED:
 		case SEC_I_CONTINUE_NEEDED:
-		case SEC_I_COMPLETE_AND_CONTINUE: /* already completed if 'complete and continue' */
-			//note_sspi_auth_challenge(ctx,
-			//	uuencode_binary(ctx->r->pool, hdrout.Password, hdrout.PasswordLength));
-			//return HTTP_UNAUTHORIZED;
+		case SEC_I_COMPLETE_AND_CONTINUE: {
+			CStringA base64;
+			int base64Length = Base64EncodeGetRequiredLength(outbuf.cbBuffer);
+			Base64Encode(pOutBuf.get(),
+				outbuf.cbBuffer,
+				base64.GetBufferSetLength(base64Length),
+				&base64Length, ATL_BASE64_FLAG_NOCRLF);
+			base64.ReleaseBufferSetLength(base64Length);
+			std::string authHStr = schema + " " + std::string(base64.GetString());
+			Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
+			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
 			res->Set(String::New("statusCode"), Integer::New(401));
 			break;
+		}
 		case SEC_E_INVALID_TOKEN:
 			//log_sspi_invalid_token(ctx->r, &ctx->hdr, APR_FROM_OS_ERROR(GetLastError()));
 			//ctx->scr->sspi_failing = 1;
