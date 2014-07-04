@@ -16,11 +16,12 @@ try {
     offerSSPI: true|false,
     offerBasic: true|false,
     authoritative: true|false,
+    omitDomain: false|true,
     usernameCase: 'lower'|'upper',
     perRequestAuth: false|true,
+    maxLoginAttemptsPerConnection: 3,
+    sspiPackagesUsed: ['NTLM'], // SSPI packages used
     domain: <string>, // used by basic authentication
-    omitDomain: false|true,
-    sspiPackagesUsed: ['NTLM'] // SSPI packages used
   }
 */
 function main(opts) {
@@ -33,6 +34,7 @@ function main(opts) {
     omitDomain: false,
     usernameCase: 'lower',
     perRequestAuth: false,
+    maxLoginAttemptsPerConnection: 3,
     sspiPackagesUsed: ['NTLM']
   };
   opts.__proto__ = defaultOpts;

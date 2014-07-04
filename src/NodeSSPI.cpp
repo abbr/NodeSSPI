@@ -111,6 +111,14 @@ Handle<Value> Authenticate(const Arguments& args) {
 			note_sspi_auth_failure(opts,req,res);
 			return scope.Close(Undefined());
 		}
+		if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+			conn->Set(String::New("remainingAttempts")
+				,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+		}
+		int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+		if(remainingAttmpts<=0){
+			throw std::exception("Max attempts reached.");
+		}
 		auto aut = std::string(*String::AsciiValue(headers->Get(String::New("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
@@ -238,6 +246,8 @@ Handle<Value> Authenticate(const Arguments& args) {
 			{
 				note_sspi_auth_failure(opts,req,res);
 				cleanup_sspi_connection(conn);
+				conn->Set(String::New("remainingAttempts")
+					,Integer::New(remainingAttmpts-1));
 				res->Set(String::New("statusCode"), Integer::New(401));
 				break;
 			}
