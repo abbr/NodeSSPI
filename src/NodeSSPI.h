@@ -19,12 +19,10 @@
 
 #define WINNT_SECURITY_DLL "SECURITY.DLL"
 #define DEFAULT_SSPI_PACKAGE "NTLM"
-#define UUID_STRING_LEN 64
 
 typedef struct {
 	BOOL supportsSSPI;
 	LPSTR defaultPackage;
-	char userDataKeyString[UUID_STRING_LEN];
 	HMODULE securityDLL;
 	SecurityFunctionTable *functable;
 	ULONG numPackages;

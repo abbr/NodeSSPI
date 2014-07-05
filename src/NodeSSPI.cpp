@@ -95,18 +95,29 @@ void cleanup_sspi_connection(Local<Object> conn)
 	}
 }
 
-void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
-	// get max token size defined by SSPI package
-	ULONG maxTokSz, i;
-	for (i = 0; i < sspiModuleInfo.numPackages; i++){
-		if (!schema.compare(sspiModuleInfo.pkgInfo[i].Name)){
-			maxTokSz = sspiModuleInfo.pkgInfo[i].cbMaxToken;
-			break;
+/*
+* get max token size defined by SSPI package
+*/
+ULONG getMaxTokenSz(std::string pkgNm){
+	for (ULONG i = 0; i < sspiModuleInfo.numPackages; i++){
+		if (!pkgNm.compare(sspiModuleInfo.pkgInfo[i].Name)){
+			return sspiModuleInfo.pkgInfo[i].cbMaxToken;
 		}
 	}
-	if (i == sspiModuleInfo.numPackages){
-		throw NodeSSPIException(("No " + schema + " SSPI package.").c_str());
+	throw NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
+}
+
+void basic_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, Local<Object> conn, BYTE *pInToken, UINT sz){
+	std::string sspiPkg(sspiModuleInfo.defaultPackage);
+	if(opts->Has(String::New("sspiPackagesUsed"))){
+		auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
+		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
 	}
+	ULONG maxTokSz = getMaxTokenSz(sspiPkg);
+}
+
+void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
+	ULONG maxTokSz = getMaxTokenSz(schema);
 	// acquire server credential
 	if (credMap.find(schema) == credMap.end()){
 		credHandleRec temp = { 0, 0 };
@@ -291,7 +302,12 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
-		sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz);
+		if(_stricmp(schema.c_str(),"basic")==0){
+			basic_authentication(opts,req,res,conn, pToken.get(), sz);
+		}
+		else{
+			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz);
+		}
 	}
 	catch (NodeSSPIException& ex){
 		cleanup_sspi_connection(conn);
