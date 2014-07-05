@@ -107,8 +107,8 @@ ULONG getMaxTokenSz(std::string pkgNm){
 	throw NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
 }
 /*
- * Acquire sharable server credentials by schema honoring expiry timestamp
- */
+* Acquire sharable server credentials by schema honoring expiry timestamp
+*/
 void acquireServerCredential(std::string schema){
 	if (credMap.find(schema) == credMap.end()){
 		credHandleRec temp = { 0, 0 };
@@ -146,6 +146,22 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 	}
 	ULONG maxTokSz = getMaxTokenSz(sspiPkg);
 	acquireServerCredential(sspiPkg);
+	// get domain, user name, password
+	*(pInToken+sz) = '\0';
+	std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
+	if(opts->Has(String::New("Domain"))){
+		domain = *String::AsciiValue(opts->Get(String::New("Domain")));
+	}
+	domainNnm = inStr.substr(0,inStr.find_first_of(":"));
+	if(domainNnm.find("\\") != std::string::npos){
+		domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
+		nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
+	}
+	else{
+		nm = domainNnm;
+	}
+	pswd = inStr.substr(inStr.find_first_of(":")+1);
+	// TODO: acquire client credential
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
