@@ -106,19 +106,10 @@ ULONG getMaxTokenSz(std::string pkgNm){
 	}
 	throw NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
 }
-
-void basic_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, Local<Object> conn, BYTE *pInToken, UINT sz){
-	std::string sspiPkg(sspiModuleInfo.defaultPackage);
-	if(opts->Has(String::New("sspiPackagesUsed"))){
-		auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
-		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
-	}
-	ULONG maxTokSz = getMaxTokenSz(sspiPkg);
-}
-
-void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
-	ULONG maxTokSz = getMaxTokenSz(schema);
-	// acquire server credential
+/*
+ * Acquire sharable server credentials by schema honoring expiry timestamp
+ */
+void acquireServerCredential(std::string schema){
 	if (credMap.find(schema) == credMap.end()){
 		credHandleRec temp = { 0, 0 };
 		credMap[schema] = temp;
@@ -145,6 +136,21 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 		}
 
 	}
+}
+
+void basic_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, Local<Object> conn, BYTE *pInToken, UINT sz){
+	std::string sspiPkg(sspiModuleInfo.defaultPackage);
+	if(opts->Has(String::New("sspiPackagesUsed"))){
+		auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
+		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
+	}
+	ULONG maxTokSz = getMaxTokenSz(sspiPkg);
+	acquireServerCredential(sspiPkg);
+}
+
+void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
+	ULONG maxTokSz = getMaxTokenSz(schema);
+	acquireServerCredential(schema);
 	// acquire server context from request.connection
 	sspi_connection_rec *pSCR = 0;
 	PCtxtHandle inPch = 0, outPch = 0;
