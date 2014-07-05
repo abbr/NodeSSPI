@@ -48,8 +48,8 @@ main.prototype.authenticate = function (req, res, next) {
   try {
     binding.authenticate(this.opts, req, res);
   } catch (ex) {
-    res.statusCode = 500;
-    res.end();
+    res.end(ex);
+    return;
   }
   if (!this.opts.authoritative || req.connection.user !== undefined) {
     next();
