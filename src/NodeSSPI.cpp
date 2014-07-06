@@ -450,40 +450,40 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 	}
 }
 
-HRESULT IsUserInGroup(HANDLE user, const wchar_t* groupNm)
+void AddUserGroupsToConnection(HANDLE usertoken, Local<Object> conn)
 {
-	HRESULT result = E_FAIL;
-	SID_NAME_USE snu;
-	WCHAR szDomain[256];
-	DWORD dwSidSize = 0;
-	DWORD dwSize = sizeof szDomain / sizeof * szDomain;
+	TOKEN_GROUPS *groupinfo = NULL;
+	DWORD groupinfosize = 0;
+	SID_NAME_USE sidtype;
+	char group_name[_MAX_PATH], domain_name[_MAX_PATH];
+	DWORD grouplen, domainlen;
+	unsigned int i;
 
-	if ((LookupAccountNameW(NULL, groupNm, 0, &dwSidSize, szDomain, &dwSize, &snu) == 0)
-		&& (ERROR_INSUFFICIENT_BUFFER == GetLastError()))
-	{
-		SID* pSid = (SID*)malloc(dwSidSize);
-
-		if (LookupAccountNameW(NULL, groupNm, pSid, &dwSidSize, szDomain, &dwSize, &snu))
-		{
-			BOOL b;
-
-			if (CheckTokenMembership(user, pSid, &b))
-			{
-				if (b == TRUE)
-				{
-					result = S_OK;
-				}
-			}
-			else
-			{
-				result = S_FALSE;
-			}
-		}
-		free(pSid);
+	if ((GetTokenInformation(usertoken, TokenGroups, groupinfo
+		, groupinfosize, &groupinfosize))
+		|| (GetLastError() != ERROR_INSUFFICIENT_BUFFER)) {
+			return;
 	}
-
-	return result;
+	groupinfo = (TOKEN_GROUPS *)malloc(groupinfosize);
+	if (!GetTokenInformation(usertoken, TokenGroups, groupinfo, groupinfosize, &groupinfosize)) {
+		return;
+	}
+	auto groups = v8::Array::New(groupinfo->GroupCount);
+	for (i = 0; i < groupinfo->GroupCount; i++) {
+		grouplen = _MAX_PATH;
+		domainlen = _MAX_PATH;
+		if (LookupAccountSid(NULL, groupinfo->Groups[i].Sid, 
+			group_name, &grouplen,
+			domain_name, &domainlen,
+			&sidtype)) {
+				std::string grpNm = std::string(domain_name)+std::string("\\")+std::string(group_name);
+				groups->Set(i, String::New(grpNm.c_str()));
+		}
+	}
+	free(groupinfo );
+	conn->Set(String::New("userGroups"),groups);
 }
+
 /*
 * args[0]: opts
 * args[1]: req
@@ -542,9 +542,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
 			throw NodeSSPIException("Cannot revert security context.");
 		}
-		if(IsUserInGroup(userToken,L"administrators")==S_OK){
-			cout<<"here";
-		}
+		AddUserGroupsToConnection(userToken, conn);
 		CleanupAuthenicationResources(conn,pServerCtx);
 	}
 	catch (NodeSSPIException& ex){

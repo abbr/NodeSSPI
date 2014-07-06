@@ -10,7 +10,6 @@
 #include <sstream>
 #include <atlenc.h>
 #include <atlstr.h>
-#include <memory>
 #include <map>
 //#include <windows.h>
 //#include <winsock2.h>

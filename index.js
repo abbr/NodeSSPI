@@ -17,6 +17,7 @@ try {
     offerBasic: true|false,
     authoritative: true|false,
     perRequestAuth: false|true,
+    retrieveGroups: false|true, // whether to retrieve groups upon successful auth
     maxLoginAttemptsPerConnection: 3,
     sspiPackagesUsed: ['NTLM'], // SSPI packages used
     domain: <string>, // used by basic authentication
@@ -30,6 +31,7 @@ function main(opts) {
     offerBasic: true,
     authoritative: true,
     perRequestAuth: false,
+    retrieveGroups: false,
     maxLoginAttemptsPerConnection: 3,
     sspiPackagesUsed: ['NTLM']
   };
