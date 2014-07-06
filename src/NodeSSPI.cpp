@@ -451,6 +451,41 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 		}
 	}
 }
+
+HRESULT IsUserInGroup(HANDLE user, const wchar_t* groupNm)
+{
+	HRESULT result = E_FAIL;
+	SID_NAME_USE snu;
+	WCHAR szDomain[256];
+	DWORD dwSidSize = 0;
+	DWORD dwSize = sizeof szDomain / sizeof * szDomain;
+
+	if ((LookupAccountNameW(NULL, groupNm, 0, &dwSidSize, szDomain, &dwSize, &snu) == 0)
+		&& (ERROR_INSUFFICIENT_BUFFER == GetLastError()))
+	{
+		SID* pSid = (SID*)malloc(dwSidSize);
+
+		if (LookupAccountNameW(NULL, groupNm, pSid, &dwSidSize, szDomain, &dwSize, &snu))
+		{
+			BOOL b;
+
+			if (CheckTokenMembership(user, pSid, &b))
+			{
+				if (b == TRUE)
+				{
+					result = S_OK;
+				}
+			}
+			else
+			{
+				result = S_FALSE;
+			}
+		}
+		free(pSid);
+	}
+
+	return result;
+}
 /*
 * args[0]: opts
 * args[1]: req
@@ -486,16 +521,32 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
-		CtxtHandle server_context = {0,0};
-		PCtxtHandle *ppServerCtx;
+		CtxtHandle serverCtx = {0,0};
+		PCtxtHandle pServerCtx = NULL;
 		if(_stricmp(schema.c_str(),"basic")==0){
-			*ppServerCtx = &server_context;
-			basic_authentication(opts,req,res,conn, pToken.get(), sz, &server_context);
+			pServerCtx = &serverCtx;
+			basic_authentication(opts,req,res,conn, pToken.get(), sz, pServerCtx);
 		}
 		else{
-			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, ppServerCtx);
+			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, &pServerCtx);
 		}
 		// TODO: access check by group, then call CleanupAuthenicationResources
+		HANDLE userToken;
+		ULONG ss;
+		if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
+			throw NodeSSPIException("Cannot impersonate user.");
+		}
+
+		if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
+			sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
+			throw NodeSSPIException("Cannot obtain user token.");
+		}
+		if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
+			throw NodeSSPIException("Cannot revert security context.");
+		}
+		if(IsUserInGroup(userToken,L"administrators")==S_OK){
+			cout<<"here";
+		}
 	}
 	catch (NodeSSPIException& ex){
 		CleanupAuthenicationResources(conn);

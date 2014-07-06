@@ -39,3 +39,4 @@ typedef struct {
     CtxtHandle server_context;
     TimeStamp server_ctxtexpiry;
 } sspi_connection_rec;
+

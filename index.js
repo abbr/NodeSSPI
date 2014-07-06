@@ -16,8 +16,6 @@ try {
     offerSSPI: true|false,
     offerBasic: true|false,
     authoritative: true|false,
-    omitDomain: false|true,
-    usernameCase: 'lower'|'upper',
     perRequestAuth: false|true,
     maxLoginAttemptsPerConnection: 3,
     sspiPackagesUsed: ['NTLM'], // SSPI packages used
@@ -31,8 +29,6 @@ function main(opts) {
     offerSSPI: true,
     offerBasic: true,
     authoritative: true,
-    omitDomain: false,
-    usernameCase: 'lower',
     perRequestAuth: false,
     maxLoginAttemptsPerConnection: 3,
     sspiPackagesUsed: ['NTLM']
