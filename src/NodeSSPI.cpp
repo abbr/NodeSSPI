@@ -529,25 +529,26 @@ Handle<Value> Authenticate(const Arguments& args) {
 			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, &pServerCtx);
 		}
 		// Retrieve user groups if requested, then call CleanupAuthenicationResources
-		if( pServerCtx
-			&& conn->Has(String::New("user"))
-			&& opts->Get(String::New("retrieveGroups"))->ToBoolean()->BooleanValue()){
-				HANDLE userToken;
-				ULONG ss;
-				if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
-					throw NodeSSPIException("Cannot impersonate user.");
-				}
+		if( pServerCtx && conn->HasOwnProperty(String::New("user"))){
+			if(
+				opts->Get(String::New("retrieveGroups"))->ToBoolean()->BooleanValue()){
+					HANDLE userToken;
+					ULONG ss;
+					if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
+						throw NodeSSPIException("Cannot impersonate user.");
+					}
 
-				if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
-					sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
-					throw NodeSSPIException("Cannot obtain user token.");
-				}
-				if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
-					throw NodeSSPIException("Cannot revert security context.");
-				}
-				AddUserGroupsToConnection(userToken, conn);
+					if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
+						sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
+						throw NodeSSPIException("Cannot obtain user token.");
+					}
+					if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
+						throw NodeSSPIException("Cannot revert security context.");
+					}
+					AddUserGroupsToConnection(userToken, conn);
+			}
+			CleanupAuthenicationResources(conn, pServerCtx);
 		}
-		CleanupAuthenicationResources(conn, pServerCtx);
 	}
 	catch (NodeSSPIException& ex){
 		CleanupAuthenicationResources(conn, pServerCtx);
