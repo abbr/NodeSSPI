@@ -149,8 +149,8 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 	// get domain, user name, password
 	*(pInToken+sz) = '\0';
 	std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
-	if(opts->Has(String::New("Domain"))){
-		domain = *String::AsciiValue(opts->Get(String::New("Domain")));
+	if(opts->Has(String::New("domain"))){
+		domain = *String::AsciiValue(opts->Get(String::New("domain")));
 	}
 	domainNnm = inStr.substr(0,inStr.find_first_of(":"));
 	if(domainNnm.find("\\") != std::string::npos){
@@ -161,7 +161,30 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 		nm = domainNnm;
 	}
 	pswd = inStr.substr(inStr.find_first_of(":")+1);
-	// TODO: acquire client credential
+	// acquire client credential
+	CredHandle clientCred;
+	TimeStamp clientCredTs;
+	SEC_WINNT_AUTH_IDENTITY authIden;
+	authIden.Domain = (unsigned char *)domain.c_str();
+	authIden.DomainLength = domain.length();
+	authIden.User = (unsigned char *) nm.c_str();
+	authIden.UserLength = nm.length();
+	authIden.Password = (unsigned char *) pswd.c_str();
+	authIden.PasswordLength = pswd.length();
+#ifdef UNICODE
+    authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+#else
+    authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
+#endif
+	if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
+		NULL,
+		(char*) sspiPkg.c_str(),
+		SECPKG_CRED_OUTBOUND,
+		NULL, &authIden, NULL, NULL,
+		&clientCred,
+		&clientCredTs) != SEC_E_OK){
+			throw NodeSSPIException("Cannot acquire client credential.");
+	};
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
