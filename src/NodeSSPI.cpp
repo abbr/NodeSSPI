@@ -301,26 +301,55 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 		}
 	} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
 
+	// TODO: cleanup
 	switch (ss) {
 	case SEC_E_OK:
-		//return OK;
+		{
+			// get user name
+			SecPkgContext_Names names;
+			SECURITY_STATUS ss;
+			char *retval = NULL;
+
+			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(&server_context, 
+				SECPKG_ATTR_NAMES, 
+				&names)
+				) == SEC_E_OK) {
+					conn->Set(String::New("user"),String::New(names.sUserName));
+					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+			}
+			else{
+				throw NodeSSPIException("Cannot obtain user name.");
+			}
+			break;
+		}
+
 
 	case SEC_E_INVALID_HANDLE:
 	case SEC_E_INTERNAL_ERROR:
 	case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 	case SEC_E_INSUFFICIENT_MEMORY:
-		//ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_FROM_OS_ERROR(GetLastError()), ctx->r,
-		//	"access to %s failed, reason: cannot generate context", ctx->r->uri);
-		//return HTTP_INTERNAL_SERVER_ERROR;
-		;
+		{
+			res->Set(String::New("statusCode"), Integer::New(500));
+			break;
+		}
 	case SEC_E_INVALID_TOKEN:
 	case SEC_E_LOGON_DENIED:
 	default:
-		//log_sspi_logon_denied(ctx->r, &ctx->hdr, APR_FROM_OS_ERROR(GetLastError()));
-		//note_sspi_auth_failure(ctx->r);
-		//cleanup_sspi_connection(ctx->scr);
-		//return HTTP_UNAUTHORIZED;
-		;
+		{
+			note_sspi_auth_failure(opts,req,res);
+			if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+				conn->Set(String::New("remainingAttempts")
+					,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+			}
+			int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+			if(remainingAttmpts<=0){
+				throw NodeSSPIException("Max login attempts reached.",403);
+			}
+			conn->Set(String::New("remainingAttempts")
+				,Integer::New(remainingAttmpts-1));
+			break;
+		}
+
 	}
 
 }
@@ -386,7 +415,6 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 			}
 			conn->Set(String::New("remainingAttempts")
 				,Integer::New(remainingAttmpts-1));
-			res->Set(String::New("statusCode"), Integer::New(401));
 			break;
 		}
 	case SEC_E_INVALID_HANDLE:
