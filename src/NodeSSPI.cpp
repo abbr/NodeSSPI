@@ -138,7 +138,7 @@ void acquireServerCredential(std::string schema){
 	}
 }
 
-static SECURITY_STATUS gen_client_context(CredHandle *pCredentials
+static ULONG gen_client_context(CredHandle *pCredentials
 	, const char * pkgNm	, BYTE *pInToken, ULONG *pInLen
 	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
 		SecBuffer inbuf, outbuf;
@@ -161,9 +161,7 @@ static SECURITY_STATUS gen_client_context(CredHandle *pCredentials
 			inbufdesc.pBuffers = &inbuf;
 		}
 		ULONG ContextAttributes;
-
-		SECURITY_STATUS ss;
-		ss = sspiModuleInfo.functable->InitializeSecurityContext(
+		ULONG ss = sspiModuleInfo.functable->InitializeSecurityContext(
 			pCredentials //  _In_opt_     PCredHandle phCredential,
 			, havecontext ? outPch : NULL //  _In_opt_     PCtxtHandle phContext,
 			, (SEC_CHAR *) pkgNm //  _In_opt_     SEC_CHAR *pszTargetName,
@@ -180,11 +178,10 @@ static SECURITY_STATUS gen_client_context(CredHandle *pCredentials
 		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
 		}
-		*pOutlen = outbuf.cbBuffer; 
 		return ss;
 }
 
-static SECURITY_STATUS gen_server_context(CredHandle *pCredentials
+static ULONG gen_server_context(CredHandle *pCredentials
 	, BYTE *pInToken, ULONG *pInLen
 	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
 		SecBuffer inbuf, outbuf;
@@ -205,7 +202,7 @@ static SECURITY_STATUS gen_server_context(CredHandle *pCredentials
 		inbufdesc.pBuffers = &inbuf;
 		ULONG ContextAttributes;
 
-		SECURITY_STATUS ss;
+		ULONG ss;
 		ss = sspiModuleInfo.functable->AcceptSecurityContext(
 			pCredentials	//  _In_opt_     PCredHandle phCredential,
 			, havecontext ? outPch : NULL //  _Inout_opt_  PCtxtHandle phContext,
@@ -220,7 +217,6 @@ static SECURITY_STATUS gen_server_context(CredHandle *pCredentials
 		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
 		}
-		*pOutlen = outbuf.cbBuffer; 
 		return ss;
 }
 void basic_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, Local<Object> conn, BYTE *pInToken, ULONG sz){
@@ -274,12 +270,11 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 	// perform authentication loop
 	ULONG cbOut, cbIn;
 	BYTE *clientbuf = NULL;
-	SECURITY_STATUS ss;
+	ULONG ss;
 	unique_ptr<BYTE[]> serverbuf(new BYTE[tokSz]);
 	cbOut = 0;
-	CtxtHandle client_context, server_context;
+	CtxtHandle client_context = {0,0}, server_context = {0,0};
 	TimeStamp client_ctxtexpiry,server_ctxtexpiry;
-	unique_ptr<BYTE[]> clipbuf;
 
 	do {
 		cbIn = cbOut;
@@ -290,8 +285,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 
 		if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			if (clientbuf == NULL) {
-				clipbuf(new BYTE[tokSz]);
-				clientbuf = clipbuf.get();
+				clientbuf = (BYTE *)malloc(tokSz);
 			}
 			cbIn = cbOut;
 			cbOut = tokSz;
@@ -351,7 +345,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 		}
 
 	}
-
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, ULONG sz){
