@@ -271,7 +271,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 	ULONG cbOut, cbIn;
 	BYTE *clientbuf = NULL;
 	ULONG ss;
-	unique_ptr<BYTE[]> serverbuf(new BYTE[tokSz]);
+	unique_ptr<BYTE[]> pServerbuf(new BYTE[tokSz]), pClientBuf(new BYTE[tokSz]);
 	cbOut = 0;
 	CtxtHandle client_context = {0,0}, server_context = {0,0};
 	TimeStamp client_ctxtexpiry,server_ctxtexpiry;
@@ -281,16 +281,16 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 		cbOut = tokSz;
 
 		ss = gen_client_context(&clientCred, sspiPkg.c_str()
-			,clientbuf,&cbIn,&client_context,serverbuf.get(),&tokSz,&client_ctxtexpiry);
+			,clientbuf,&cbIn,&client_context,pServerbuf.get(),&tokSz,&client_ctxtexpiry);
 
 		if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			if (clientbuf == NULL) {
-				clientbuf = (BYTE *)malloc(tokSz);
+				clientbuf = pClientBuf.get();
 			}
 			cbIn = cbOut;
 			cbOut = tokSz;
 
-			ss = gen_server_context(&credMap[sspiPkg].credHandl,serverbuf.get()
+			ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
 				, &cbIn, &server_context, clientbuf, &cbOut, &server_ctxtexpiry);
 		}
 	} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
@@ -361,6 +361,8 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 		outPch = &pSCR->server_context;
 	}
 	else{
+		//TODO: hook to connection end event to
+		//		clean up in-progress authentication
 		pSCR = static_cast<sspi_connection_rec *>(malloc(sizeof(sspi_connection_rec)));
 		SecureZeroMemory(pSCR,sizeof(sspi_connection_rec));
 		outPch = &pSCR->server_context;
