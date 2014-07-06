@@ -492,6 +492,7 @@ void AddUserGroupsToConnection(HANDLE usertoken, Local<Object> conn)
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
 	Local<Object> conn;
+	PCtxtHandle pServerCtx = NULL;
 	try{
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
@@ -520,7 +521,6 @@ Handle<Value> Authenticate(const Arguments& args) {
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
 		CtxtHandle serverCtx = {0,0};
-		PCtxtHandle pServerCtx = NULL;
 		if(_stricmp(schema.c_str(),"basic")==0){
 			pServerCtx = &serverCtx;
 			basic_authentication(opts,req,res,conn, pToken.get(), sz, pServerCtx);
@@ -528,25 +528,29 @@ Handle<Value> Authenticate(const Arguments& args) {
 		else{
 			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, &pServerCtx);
 		}
-		// TODO: access check by group, then call CleanupAuthenicationResources
-		HANDLE userToken;
-		ULONG ss;
-		if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
-			throw NodeSSPIException("Cannot impersonate user.");
-		}
+		// Retrieve user groups if requested, then call CleanupAuthenicationResources
+		if( pServerCtx
+			&& conn->Has(String::New("user"))
+			&& opts->Get(String::New("retrieveGroups"))->ToBoolean()->BooleanValue()){
+				HANDLE userToken;
+				ULONG ss;
+				if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
+					throw NodeSSPIException("Cannot impersonate user.");
+				}
 
-		if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
-			sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
-			throw NodeSSPIException("Cannot obtain user token.");
+				if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
+					sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
+					throw NodeSSPIException("Cannot obtain user token.");
+				}
+				if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
+					throw NodeSSPIException("Cannot revert security context.");
+				}
+				AddUserGroupsToConnection(userToken, conn);
 		}
-		if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
-			throw NodeSSPIException("Cannot revert security context.");
-		}
-		AddUserGroupsToConnection(userToken, conn);
-		CleanupAuthenicationResources(conn,pServerCtx);
+		CleanupAuthenicationResources(conn, pServerCtx);
 	}
 	catch (NodeSSPIException& ex){
-		CleanupAuthenicationResources(conn);
+		CleanupAuthenicationResources(conn, pServerCtx);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
 		// throw exception to js land
 		return v8::ThrowException(v8::String::New(ex.what()));
