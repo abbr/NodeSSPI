@@ -81,7 +81,6 @@ void note_sspi_auth_failure(const Local<Object> opts,const Local<Object> req,Loc
 }
 
 void CleanupAuthenicationResources(Local<Object> conn
-	, PCredHandle pCliCred = NULL
 	, PCtxtHandle pSvrCtxHdl = NULL)
 {
 	sspi_connection_rec *pSCR = 0;
@@ -95,7 +94,6 @@ void CleanupAuthenicationResources(Local<Object> conn
 		free(pSCR);
 		conn->Delete(String::New("svrCtx"));
 	}
-	pCliCred && sspiModuleInfo.functable->FreeCredentialsHandle(pCliCred);
 	pSvrCtxHdl && sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
 }
 
@@ -302,6 +300,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 			}
 		} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
 		sspiModuleInfo.functable->DeleteSecurityContext(&client_context);
+		sspiModuleInfo.functable->FreeCredentialsHandle(&clientCred);
 		switch (ss) {
 		case SEC_E_OK:
 			{
@@ -318,7 +317,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 				}
 				else{
-					CleanupAuthenicationResources(conn, &clientCred, pServerCtx);
+					CleanupAuthenicationResources(conn, pServerCtx);
 					throw NodeSSPIException("Cannot obtain user name.");
 				}
 				break;
@@ -328,7 +327,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 			{
-				CleanupAuthenicationResources(conn, &clientCred, pServerCtx);
+				CleanupAuthenicationResources(conn, pServerCtx);
 				res->Set(String::New("statusCode"), Integer::New(500));
 				break;
 			}
@@ -337,7 +336,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		default:
 			{
 				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn, &clientCred, pServerCtx);
+				CleanupAuthenicationResources(conn, pServerCtx);
 				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
 					conn->Set(String::New("remainingAttempts")
 						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
@@ -350,7 +349,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 					,Integer::New(remainingAttmpts-1));
 				break;
 			}
-
 		}
 }
 
@@ -547,6 +545,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if(IsUserInGroup(userToken,L"administrators")==S_OK){
 			cout<<"here";
 		}
+		CleanupAuthenicationResources(conn,pServerCtx);
 	}
 	catch (NodeSSPIException& ex){
 		CleanupAuthenicationResources(conn);
