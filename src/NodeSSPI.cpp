@@ -138,13 +138,51 @@ void acquireServerCredential(std::string schema){
 	}
 }
 
+static SECURITY_STATUS gen_server_context(CredHandle *pCredentials
+	, BYTE *pInToken, UINT inSz, PCtxtHandle inPch
+	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
+		SecBuffer inbuf, outbuf;
+		SecBufferDesc inbufdesc, outbufdesc;
+		outbuf.cbBuffer = *pOutlen;
+		outbuf.BufferType = SECBUFFER_TOKEN;
+		outbuf.pvBuffer = out;
+		outbufdesc.ulVersion = SECBUFFER_VERSION;
+		outbufdesc.cBuffers = 1;
+		outbufdesc.pBuffers = &outbuf;
+
+		inbuf.BufferType = SECBUFFER_TOKEN;
+		inbuf.cbBuffer = inSz;
+		inbuf.pvBuffer = pInToken;
+		inbufdesc.cBuffers = 1;
+		inbufdesc.ulVersion = SECBUFFER_VERSION;
+		inbufdesc.pBuffers = &inbuf;
+		ULONG ContextAttributes;
+
+		SECURITY_STATUS ss;
+		ss = sspiModuleInfo.functable->AcceptSecurityContext(
+			pCredentials	//  _In_opt_     PCredHandle phCredential,
+			, inPch //  _Inout_opt_  PCtxtHandle phContext,
+			, &inbufdesc //  _In_opt_     PSecBufferDesc pInput,
+			, ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
+			, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
+			, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
+			, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
+			, &ContextAttributes //  _Out_        PULONG pfContextAttr,
+			, pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
+			);
+		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
+			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
+		}
+		*pOutlen = outbuf.cbBuffer; 
+		return ss;
+}
 void basic_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, Local<Object> conn, BYTE *pInToken, UINT sz){
 	std::string sspiPkg(sspiModuleInfo.defaultPackage);
 	if(opts->Has(String::New("sspiPackagesUsed"))){
 		auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
 		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
 	}
-	ULONG maxTokSz = getMaxTokenSz(sspiPkg);
+	ULONG tokSz = getMaxTokenSz(sspiPkg);
 	acquireServerCredential(sspiPkg);
 	// get domain, user name, password
 	*(pInToken+sz) = '\0';
@@ -172,9 +210,9 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 	authIden.Password = (unsigned char *) pswd.c_str();
 	authIden.PasswordLength = pswd.length();
 #ifdef UNICODE
-    authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+	authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
 #else
-    authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
+	authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
 #endif
 	if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
 		NULL,
@@ -188,7 +226,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req,Local
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, UINT sz){
-	ULONG maxTokSz = getMaxTokenSz(schema);
+	ULONG tokSz = getMaxTokenSz(schema);
 	acquireServerCredential(schema);
 	// acquire server context from request.connection
 	sspi_connection_rec *pSCR = 0;
@@ -210,50 +248,19 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 		conn->Set(String::New("svrCtx"), obj);
 	}
 	pTS = &pSCR->server_ctxtexpiry;
-	// call AcceptSecurityContext 
-	SecBuffer inbuf, outbuf;
-	SecBufferDesc inbufdesc, outbufdesc;
-	outbuf.cbBuffer = maxTokSz;
-	outbuf.BufferType = SECBUFFER_TOKEN;
-	unique_ptr<BYTE[]> pOutBuf(new BYTE[maxTokSz]);
-	outbuf.pvBuffer = pOutBuf.get();
-	outbufdesc.ulVersion = SECBUFFER_VERSION;
-	outbufdesc.cBuffers = 1;
-	outbufdesc.pBuffers = &outbuf;
-
-	inbuf.BufferType = SECBUFFER_TOKEN;
-	inbuf.cbBuffer = sz;
-	inbuf.pvBuffer = pInToken;
-	inbufdesc.cBuffers = 1;
-	inbufdesc.ulVersion = SECBUFFER_VERSION;
-	inbufdesc.pBuffers = &inbuf;
-	ULONG ContextAttributes;
-
-	SECURITY_STATUS ss;
-	ss = sspiModuleInfo.functable->AcceptSecurityContext(
-		&credMap[schema].credHandl	//  _In_opt_     PCredHandle phCredential,
-		, inPch //  _Inout_opt_  PCtxtHandle phContext,
-		, &inbufdesc //  _In_opt_     PSecBufferDesc pInput,
-		, ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
-		, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
-		, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
-		, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
-		, &ContextAttributes //  _Out_        PULONG pfContextAttr,
-		, pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
-		);
-	if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
-		sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
-	}
-
+	// call AcceptSecurityContext to generate server context
+	unique_ptr<BYTE[]> pOutBuf(new BYTE[tokSz]);
+	SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
+		, pInToken, sz,inPch, outPch, pOutBuf.get(), &tokSz, pTS);
 	switch (ss) {
 	case SEC_I_COMPLETE_NEEDED:
 	case SEC_I_CONTINUE_NEEDED:
 	case SEC_I_COMPLETE_AND_CONTINUE: 
 		{
 			CStringA base64;
-			int base64Length = Base64EncodeGetRequiredLength(outbuf.cbBuffer);
+			int base64Length = Base64EncodeGetRequiredLength(tokSz);
 			Base64Encode(pOutBuf.get(),
-				outbuf.cbBuffer,
+				tokSz,
 				base64.GetBufferSetLength(base64Length),
 				&base64Length, ATL_BASE64_FLAG_NOCRLF);
 			base64.ReleaseBufferSetLength(base64Length);
