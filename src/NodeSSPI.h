@@ -11,6 +11,8 @@
 #include <atlenc.h>
 #include <atlstr.h>
 #include <map>
+#include <memory>
+
 //#include <windows.h>
 //#include <winsock2.h>
 #include <sspi.h>
