@@ -53,7 +53,7 @@ server.listen(port, function () {
 });
 ```
 
-### Options
+### Inputs
 
 The call to `new nodeSSPI(opts)` in above code takes following options:
   * offerSSPI: true|false 
@@ -61,17 +61,27 @@ The call to `new nodeSSPI(opts)` in above code takes following options:
   * offerBasic: true|false 
       - default to true. Whether to offer Basic authenication
   * authoritative: true|false 
-      -  default to ture. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passing to downstream is guaranteed to have its `req.connection.user` field populated with authenticated user name. Unauthenticated request will be blocked. If set to false, requests passed downstream are not guaranteed to be authenticated and downstream middleware have the chance to impose their own authentication mechanism. 
+      -  default to ture. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passed to downstream are guaranteed to be authenticated because non-authencated requests will be blocked. If set to false, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
   * perRequestAuth: false|true 
       - default to false. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
-      - default to false. Whether to retrieve groups upon successful authentication. If set to true, group names are populated to field `req.connection.userGroups` as an array.
+      - default to false. Whether to retrieve groups upon successful authentication. 
   * maxLoginAttemptsPerConnection: \<number\> 
       - default to 3. How many login attempts are permitted for this connection.
   * sspiPackagesUsed: \<array\> 
       - default to ['NTLM']. An array of SSPI packages used.
   * domain: \<string\> 
       - no default value. This is the domain name (a.k.a realm) used by basic authentication if user doesn't prefix their login name with `<domain_name>\`. 
+
+### Outputs
+  * Upon successful authentication, authenticated user name is populated into field `req.connection.user` 
+    *   If option `retrieveGroups` is true, group names are populated into field `req.connection.userGroups` as an array.
+  * Otherwise
+    *   If option `authoritative` is set to ture, then the request will be blocked. The reason of blocking (i.e. error message) is supplied as response body. Some response headers such as `WWW-Authenticate` may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
+      *   403 if max login attempts are reached
+      *   401 for all in-progress authentications, including protocols that takes multiple round trips or if max login attempts are not reached.
+      *   500 when server encountered unknown exceptions.
+    *  If option `authoritative` is not set to true, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
 
 ## Caveats
 SSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM has been tested.
