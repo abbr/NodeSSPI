@@ -86,12 +86,6 @@ void CleanupAuthenicationResources(Local<Object> conn
 	sspi_connection_rec *pSCR = 0;
 	PCtxtHandle outPch = 0;
 	if (conn->HasOwnProperty(String::New("svrCtx"))){
-		Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
-		pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
-		outPch = &pSCR->server_context;
-		sspiModuleInfo.functable->DeleteSecurityContext(outPch);
-		outPch->dwLower = outPch->dwUpper = 0;
-		free(pSCR);
 		conn->Delete(String::New("svrCtx"));
 	}
 	pSvrCtxHdl && sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
@@ -352,6 +346,16 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		}
 }
 
+void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
+{
+	sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *> (parameter);
+	if(!pSCR) return;
+	PCtxtHandle outPch =  &pSCR->server_context;
+	SECURITY_STATUS ss = sspiModuleInfo.functable->DeleteSecurityContext(outPch);
+	outPch->dwLower = outPch->dwUpper = 0;
+	free(pSCR);
+}
+
 void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken, ULONG sz, PCtxtHandle * ppServerCtx){
 	ULONG tokSz = getMaxTokenSz(schema);
 	acquireServerCredential(schema);
@@ -363,22 +367,22 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req,Local<
 		// this is not initial request
 		Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
 		pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
-		outPch = &pSCR->server_context;
 	}
 	else{
-		//TODO: hook to connection end event to
-		//		clean up in-progress authentication
 		pSCR = static_cast<sspi_connection_rec *>(malloc(sizeof(sspi_connection_rec)));
 		SecureZeroMemory(pSCR,sizeof(sspi_connection_rec));
-		outPch = &pSCR->server_context;
 		Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
 		svrCtx_templ->SetInternalFieldCount(1);
-		Local<Object> obj = svrCtx_templ->NewInstance();
-		obj->SetInternalField(0, External::New(outPch));
+		Persistent<Object> obj = Persistent<Object>::New(svrCtx_templ->NewInstance());
+		obj->SetInternalField(0, External::New(pSCR));
+		// hook to GC to clean up in-progress authentications
+		// necessary to defend against attacks similar to sync flood 
+		obj.MakeWeak(pSCR,weakSvrCtxCallback);
 		conn->Set(String::New("svrCtx"), obj);
 	}
-	*ppServerCtx = outPch;
+	outPch = &pSCR->server_context;
 	pTS = &pSCR->server_ctxtexpiry;
+	*ppServerCtx = outPch;
 	// call AcceptSecurityContext to generate server context
 	unique_ptr<BYTE[]> pOutBuf(new BYTE[tokSz]);
 	SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
