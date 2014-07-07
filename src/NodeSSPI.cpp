@@ -498,17 +498,17 @@ Handle<Value> Authenticate(const Arguments& args) {
 	Local<Object> conn;
 	PCtxtHandle pServerCtx = NULL;
 	try{
-		if (sspiModuleInfo.supportsSSPI == FALSE) {
-			throw NodeSSPIException("Doesn't suport SSPI.");
-		}
-		auto opts = args[0]->ToObject();
 		auto req = args[1]->ToObject();
-		auto res = args[2]->ToObject();
-		auto headers = req->Get(String::New("headers"))->ToObject(); 
 		conn = req->Get(String::New("connection"))->ToObject();
 		if(conn->HasOwnProperty(String::New("user"))){
 			return scope.Close(Undefined());
 		}
+		if (sspiModuleInfo.supportsSSPI == FALSE) {
+			throw NodeSSPIException("Doesn't suport SSPI.");
+		}
+		auto opts = args[0]->ToObject();
+		auto res = args[2]->ToObject();
+		auto headers = req->Get(String::New("headers"))->ToObject(); 
 		if(!headers->Has(String::New("authorization"))){
 			note_sspi_auth_failure(opts,req,res);
 			return scope.Close(Undefined());

@@ -3,7 +3,8 @@ var fs = require('fs'),
 var binding;
 
 // Look for binary for this platform
-var modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch, 'nodeSSPI');
+var v8 = 'v8-' + /[0-9]+/.exec(process.versions.v8)[0];
+var modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch + '-' + v8, 'nodeSSPI');
 try {
   fs.statSync(modPath + '.node');
   binding = require(modPath);

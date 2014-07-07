@@ -7,7 +7,8 @@ var force = false,
   debug = process.env.npm_config_debug || false;
 var
   arch = process.arch,
-  platform = process.platform;
+  platform = process.platform,
+  v8 = /[0-9]+/.exec(process.versions.v8)[0];
 var args = process.argv.slice(2).filter(function (arg) {
   if (arg === '-f') {
     force = true;
@@ -22,15 +23,14 @@ var args = process.argv.slice(2).filter(function (arg) {
 console.log("debug=" + debug);
 if (!{
   ia32: true,
-  x64: true,
-  arm: true
+  x64: true
 }.hasOwnProperty(arch)) {
   console.error('Unsupported (?) architecture: `' + arch + '`');
   process.exit(1);
 }
 
 // Test for pre-built library
-var modPath = platform + '-' + arch;
+var modPath = platform+ '-'+ arch+ '-v8-'+ v8;
 if (!force) {
   try {
     fs.statSync(path.join(__dirname, 'bin', modPath, 'nodeSSPI.node'));
