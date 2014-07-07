@@ -18,7 +18,7 @@ Despite the resemblance, NodeSSPI is not a like-for-like porting of mod-auth-ssp
 
 ## Usages
 ### Overview
-Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js (in fact, it has virtually no npm module dependencies).
+Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js. In fact, it has virtually no npm module dependencies.
 
 ```
 'use strict';
