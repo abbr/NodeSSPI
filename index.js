@@ -40,19 +40,21 @@ function main(opts) {
   this.opts = opts;
 }
 
-main.prototype.authenticate = function (req, res, next) {
+main.prototype.authenticate = function (req, res) {
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
   try {
     binding.authenticate(this.opts, req, res);
   } catch (ex) {
-    res.end(ex);
-    return;
+    if (this.opts.authoritative) {
+      res.end(ex);
+      return;
+    } else {
+      return ex;
+    }
   }
-  if (!this.opts.authoritative || req.connection.user !== undefined) {
-    next();
-  } else {
+  if (this.opts.authoritative && req.connection.user === undefined) {
     res.end();
   }
 }
