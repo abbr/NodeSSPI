@@ -6,9 +6,9 @@ NodeSSPI to Node.js is what [mod-auth-sspi](https://code.google.com/p/mod-auth-s
 ## Background
 Organizations using Microsoft Active Directory for identity management often rely on NTLM and Kerberos - collectively known as Windows authentiaton, as Single-Sign-On (SSO) solution to secure various corporate web sites. Windows authentication also offers the convinence of transparent authentication by default for browsers such as Internet Explorer and Google Chrome when running on corporate Windows computers configured by group policy.
 
-Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a popular choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such enterprise environment, it has been necessary to put Node.js behind one of these web servers to let the r-proxies handle the authentication. But this infrastructural layout defeated the design benefits of Node.js - a high performance non-blocking I/O web server suitable as front-end r-proxies just like Nginx.
+Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a common choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such enterprise environment, it is necessary to put Node.js behind one of these web servers to rely on the r-proxies handle  authentication. But this infrastructural layout defeated the design benefits of Node.js - a high performance non-blocking I/O web server ideally acting as forefront r-proxy by itself.
 
-This paradox impedes the adoption of Node.js to the enterprise world until the advent of NodeSSPI.
+This paradox has been impeding adoption of Node.js to the enterprise world, until the advent of NodeSSPI.
 
 ## Description
 
