@@ -14,7 +14,7 @@ This paradox has been impeding adoption of Node.js to the enterprise world, unti
 
 NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
 
-Despite NodeSSPI is modeled after mod-auth-sspi, it is not a like-for-like porting. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
+Despite the resemblance, NodeSSPI is not a like-for-like porting of mod-auth-sspi. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
 ## Usages
 ### Overview
