@@ -56,14 +56,22 @@ server.listen(port, function () {
 ### Options
 
 The call to `new nodeSSPI(opts)` in above code takes following options:
-  * offerSSPI: true|false - default to true. Whether to offer SSPI Windows authentication
-  * offerBasic: true|false - default to true. Whether to offer Basic authenication
-  * authoritative: true|false -  default to ture. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passing to downstream is guaranteed to have its req.connection.user field populated with authenticated user name. Unauthenticated request will be blocked. If set to false, requests passed downstream are not guaranteed to be authenticated and downstream middleware have the chance to impose their own authentication mechanism. 
-  * perRequestAuth: false|true - default to false. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
-  * retrieveGroups: false|true - default to false. Whether to retrieve groups upon successful authentication.
-  * maxLoginAttemptsPerConnection: <number> - default to 3. How many login attempts are permitted.
-  * sspiPackagesUsed: <array> - default to ['NTLM']. An array of SSPI packages used.
-  * domain: <string> - no default. This is the realm name used by basic authentication only.
+  * offerSSPI: true|false 
+      - default to true. Whether to offer SSPI Windows authentication
+  * offerBasic: true|false 
+      - default to true. Whether to offer Basic authenication
+  * authoritative: true|false 
+      -  default to ture. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passing to downstream is guaranteed to have its `req.connection.user` field populated with authenticated user name. Unauthenticated request will be blocked. If set to false, requests passed downstream are not guaranteed to be authenticated and downstream middleware have the chance to impose their own authentication mechanism. 
+  * perRequestAuth: false|true 
+      - default to false. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
+  * retrieveGroups: false|true 
+      - default to false. Whether to retrieve groups upon successful authentication. If set to true, group names are populated to field `req.connection.userGroups` as an array.
+  * maxLoginAttemptsPerConnection: \<number\> 
+      - default to 3. How many login attempts are permitted for this connection.
+  * sspiPackagesUsed: \<array\> 
+      - default to ['NTLM']. An array of SSPI packages used.
+  * domain: \<string\> 
+      - no default value. This is the domain name (a.k.a realm) used by basic authentication if user doesn't prefix their login name with `<domain_name>\`. 
 
 ## Caveats
 SSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM has been tested.
