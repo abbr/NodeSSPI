@@ -174,6 +174,7 @@ static ULONG gen_client_context(CredHandle *pCredentials
 		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
 		}
+		*pOutlen = outbufdesc.pBuffers->cbBuffer;
 		return ss;
 }
 
@@ -213,6 +214,7 @@ static ULONG gen_server_context(CredHandle *pCredentials
 		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
 		}
+		*pOutlen = outbufdesc.pBuffers->cbBuffer;
 		return ss;
 }
 
@@ -278,9 +280,8 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		do {
 			cbIn = cbOut;
 			cbOut = tokSz;
-
 			ss = gen_client_context(&clientCred, sspiPkg.c_str()
-				,clientbuf,&cbIn,&client_context,pServerbuf.get(),&tokSz,&client_ctxtexpiry);
+				, clientbuf, &cbIn, &client_context, pServerbuf.get(), &cbOut, &client_ctxtexpiry);
 
 			if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
 				if (clientbuf == NULL) {
@@ -288,7 +289,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 				}
 				cbIn = cbOut;
 				cbOut = tokSz;
-
 				ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
 					, &cbIn, pServerCtx, clientbuf, &cbOut, &server_ctxtexpiry);
 			}
