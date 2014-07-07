@@ -17,8 +17,8 @@ NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windo
 Despite NodeSSPI is modeled after mod-auth-sspi, it is not a like-for-like porting. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
 ## Usages
-
-Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't depend on Express.js (in fact, it has virtually no npm module dependencies) therefore it can be used by other Node.js based web frameworks.
+### Overview
+Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js (in fact, it has virtually no npm module dependencies).
 
 ```
 'use strict';
@@ -32,7 +32,8 @@ app.configure(function () {
     var nodeSSPIObj = new nodeSSPI({
       retrieveGroups: true
     });
-    nodeSSPIObj.authenticate(req, res, next);
+    nodeSSPIObj.authenticate(req, res);
+    next();
   });
   app.use(function (req, res, next) {
     var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
@@ -51,6 +52,18 @@ server.listen(port, function () {
   console.log('Express server listening on port %d in %s mode', port, app.get('env'));
 });
 ```
+
+### Options
+
+The call to `new nodeSSPI(opts)` in above code takes following options:
+  * offerSSPI: true|false - default to true. Whether to offer SSPI Windows authentication
+  * offerBasic: true|false - default to true. Whether to offer Basic authenication
+  * authoritative: true|false -  default to ture. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passing to downstream is guaranteed to have its req.connection.user field populated with authenticated user name. Unauthenticated request will be blocked. If set to false, requests passed downstream are not guaranteed to be authenticated and downstream middleware have the chance to impose their own authentication mechanism. 
+  * perRequestAuth: false|true - default to false. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
+  * retrieveGroups: false|true - default to false. Whether to retrieve groups upon successful authentication.
+  * maxLoginAttemptsPerConnection: <number> - default to 3. How many login attempts are permitted.
+  * sspiPackagesUsed: <array> - default to ['NTLM']. An array of SSPI packages used.
+  * domain: <string> - no default. This is the realm name used by basic authentication only.
 
 ## Caveats
 SSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM has been tested.
