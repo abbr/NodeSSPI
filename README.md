@@ -6,19 +6,19 @@ NodeSSPI to Node.js is what [mod-auth-sspi](https://code.google.com/p/mod-auth-s
 ## Background
 Organizations using Microsoft Active Directory for identity management often rely on NTLM and Kerberos - collectively known as Windows authentiaton, as Single-Sign-On (SSO) solution to secure various corporate web sites. Windows authentication also offers the convinence of transparent authentication by default for browsers such as Internet Explorer and Google Chrome when running on corporate Windows computers configured by group policy.
 
-Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a popular choice, especially used as reverse proxy (r-proxy). For Node.js to be useful in such corporate environment, it has been necessary to put Node.js behind one of these web servers to let the r-proxies handle the authentication. But this infrastructural layout defeated the design objectives of Node.js - a high performance non-blocking I/O web server suitable as front-end r-proxies just like Nginx.
+Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a popular choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such corporate environment, it has been necessary to put Node.js behind one of these web servers to let the r-proxies handle the authentication. But this infrastructural layout defeated the design objectives of Node.js - a high performance non-blocking I/O web server suitable as front-end r-proxies just like Nginx.
 
 Until the advent of NodeSSPI...
 
 ## Description
 
-NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also support Basic authentication against underlying Active Directory (for domain servers) or Windows user store (for non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the authenticated user belongs to, facilitating downstream middleware to perform authorization.
+NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
 
-People familiar with mod-auth-sspi should note despite NodeSSPI is modeled after mod-auth-sspi, it is not a like-for-like porting. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript at much more flexibility.
+Despite NodeSSPI is modeled after mod-auth-sspi, it is not a like-for-like porting. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
 ## Usages
 
-Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't depend on Express.js (in fact, it depends virtually on nothing) therefore it can be used by other Node.js based web frameworks.
+Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't depend on Express.js (in fact, it has virtually no npm module dependencies) therefore it can be used by other Node.js based web frameworks.
 
 ```
 'use strict';
