@@ -93,6 +93,7 @@ Platforms older than Windows 2000 are unlikely to work. Other platforms may work
 
 ## Caveats
   * NodeSSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM and Negotiate have been tested.
+  * No tests have been performed on servers with unicode system locale.
   * All WinAPI calls including SSPI authentication and group retrievals are performed synchronously, during which Node.js thread is blocked while the server is communicating with the domain controler. Therefore there is potential performance impact. Fixing is underway.
 
 ## Installation
