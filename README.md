@@ -61,7 +61,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * offerBasic: true|false 
       - default to *true*. Whether to offer Basic authenication
   * authoritative: true|false 
-      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passed to downstream are guaranteed to be authenticated because non-authencated requests will be blocked. If set to false, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
+      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to false, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
