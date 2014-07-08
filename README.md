@@ -33,7 +33,7 @@ app.configure(function () {
       retrieveGroups: true
     });
     nodeSSPIObj.authenticate(req, res);
-    next();
+    res.finished || next();
   });
   app.use(function (req, res, next) {
     var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
