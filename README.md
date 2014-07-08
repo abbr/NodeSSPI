@@ -88,6 +88,7 @@ NodeSSPI has been tested working on these Windows platforms:
   * Windows Vista x32
   * Windows 7 x64
   * Windows Server 2008 R2
+
 Platforms older than Windows 2000 are unlikely to work. Other platforms may work but haven't been tested.
 
 ## Caveats
