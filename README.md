@@ -55,7 +55,7 @@ server.listen(port, function () {
 
 ### Inputs
 
-The call to `new nodeSSPI(opts)` in above code takes following options:
+The call to `new nodeSSPI(opts)` in above code can take following options:
   * offerSSPI: true|false 
       - default to true. Whether to offer SSPI Windows authentication
   * offerBasic: true|false 
