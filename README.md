@@ -83,8 +83,15 @@ The call to `new nodeSSPI(opts)` in above code takes following options:
       *   500 when server encountered unknown exceptions.
     *  If option `authoritative` is not set to true, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
 
+## Platforms
+NodeSSPI has been tested working on these Windows platforms:
+  * Windows Vista x32
+  * Windows 7 x64
+  * Windows Server 2008 R2
+Platforms older than Windows 2000 are unlikely to work. Other platforms may work but haven't been tested.
+
 ## Caveats
-SSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM has been tested.
+  * NodeSSPI is still early in development. Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502(v=vs.85).aspx). So far only NTLM has been tested.
 
 ## Installation
 Prerequisites: Except on a few [ platforms + V8 version combinations](https://github.com/abbr/NodeSSPI-bin) where binary distribution is included, NodeSSPI uses node-gyp to compile C++ source code so you may need the compilers listed in [node-gyp](https://github.com/TooTallNate/node-gyp). You may also need to [update npm's bundled node gyp](https://github.com/TooTallNate/node-gyp/wiki/Updating-npm's-bundled-node-gyp).
