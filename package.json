@@ -1,7 +1,7 @@
 {
   "name": "node-sspi",
   "version": "0.0.4",
-  "description": "Windows SSPI authentication for Node",
+  "description": "Windows SSPI server-side authentication for Node",
   "main": "index.js",
   "author": "Fred Wen<wenfred@gmail.com>",
   "license": "MIT",
