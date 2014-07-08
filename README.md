@@ -61,7 +61,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * offerBasic: true|false 
       - default to *true*. Whether to offer Basic authenication
   * authoritative: true|false 
-      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to true, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to false, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
+      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to *true*, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to *false*, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
@@ -75,13 +75,13 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
 
 ### Outputs
   * Upon successful authentication, authenticated user name is populated into field `req.connection.user` 
-    *   If option `retrieveGroups` is true, group names are populated into field `req.connection.userGroups` as an array.
+    *   If option `retrieveGroups` is *true*, group names are populated into field `req.connection.userGroups` as an array.
   * Otherwise
-    *   If option `authoritative` is set to ture, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
+    *   If option `authoritative` is set to *ture*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
       *   403 if max login attempts are reached
       *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
       *   500 when NodeSSPI encountered unknown exceptions.
-    *  If option `authoritative` is not set to true, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
+    *  If option `authoritative` is not set to *true*, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
 NodeSSPI has been tested working on these Windows platforms:
