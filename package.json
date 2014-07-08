@@ -20,5 +20,5 @@
     "url": "https://github.com/abbr/nodesspi.git"
   },
   "homepage": "https://github.com/abbr/nodesspi",
-  "keywords": ["SSPI", "authentication", "NTLM", "Kerberos"]
+  "keywords": ["sspi", "authentication", "ntlm", "kerberos"]
 }
