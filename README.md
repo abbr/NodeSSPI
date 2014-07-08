@@ -6,7 +6,7 @@ NodeSSPI to Node.js is what [mod-auth-sspi](https://code.google.com/p/mod-auth-s
 ## Background
 Organizations using Microsoft Active Directory for identity management often rely on NTLM and Kerberos - collectively known as Windows authentiaton, as Single-Sign-On (SSO) solution to secure various corporate web sites. Windows authentication also offers the convinence of transparent authentication by default for browsers such as Internet Explorer and Google Chrome when running on corporate Windows computers configured by group policy.
 
-Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a common choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such enterprise environment, it is necessary to put Node.js behind one of these web servers to rely on the r-proxies handle  authentication. But this infrastructural layout defeated the design benefits of Node.js - a high performance non-blocking I/O web server ideally acting as forefront r-proxy by itself.
+Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a common choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such enterprise environment, it is necessary to put Node.js behind one of these web servers to rely on the r-proxies handling authentication. But this infrastructural layout defeated the design benefits of Node.js - a high performance non-blocking I/O web server ideally acting as forefront r-proxy by itself.
 
 This paradox has been impeding adoption of Node.js to the enterprise world, until the advent of NodeSSPI.
 
@@ -14,7 +14,7 @@ This paradox has been impeding adoption of Node.js to the enterprise world, unti
 
 NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
 
-Despite the resemblance, NodeSSPI is not a like-for-like porting of mod-auth-sspi. This is because unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
+Despite the resemblance, NodeSSPI is not a like-for-like porting of mod-auth-sspi. This is partially because, unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
 ## Usages
 ### Overview
@@ -66,21 +66,21 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
       - default to false. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
       - default to false. Whether to retrieve groups upon successful authentication. 
-  * maxLoginAttemptsPerConnection: \<number\> 
+  * maxLoginAttemptsPerConnection: &lt;number&gt;
       - default to 3. How many login attempts are permitted for this connection.
-  * sspiPackagesUsed: \<array\> 
+  * sspiPackagesUsed: &lt;array&gt;
       - default to ['NTLM']. An array of SSPI packages used.
-  * domain: \<string\> 
+  * domain: &lt;string&gt;
       - no default value. This is the domain name (a.k.a realm) used by basic authentication if user doesn't prefix their login name with `<domain_name>\`. 
 
 ### Outputs
   * Upon successful authentication, authenticated user name is populated into field `req.connection.user` 
     *   If option `retrieveGroups` is true, group names are populated into field `req.connection.userGroups` as an array.
   * Otherwise
-    *   If option `authoritative` is set to ture, then the request will be blocked. The reason of blocking (i.e. error message) is supplied as response body. Some response headers such as `WWW-Authenticate` may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
+    *   If option `authoritative` is set to ture, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body. Some response headers such as `WWW-Authenticate` may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
       *   403 if max login attempts are reached
-      *   401 for all in-progress authentications, including protocols that takes multiple round trips or if max login attempts are not reached.
-      *   500 when server encountered unknown exceptions.
+      *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
+      *   500 when NodeSSPI encountered unknown exceptions.
     *  If option `authoritative` is not set to true, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
