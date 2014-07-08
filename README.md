@@ -14,7 +14,7 @@ This paradox has been impeding adoption of Node.js to the enterprise world, unti
 
 NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
 
-Despite the resemblance, NodeSSPI is not a like-for-like porting of mod-auth-sspi. This is partially because, unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
+Despite the resemblance, NodeSSPI is not a feature-wize like-for-like porting of mod-auth-sspi. This is partially because, unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
 ## Usages
 ### Overview
@@ -61,7 +61,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * offerBasic: true|false 
       - default to *true*. Whether to offer Basic authenication
   * authoritative: true|false 
-      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to *true*, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to *false*, there is no such guarantee and downstream middleware have the chance to impose their own authentication mechanism.
+      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to *true*, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to *false*, there is no such guarantee and downstream middleware have the chance to override outputs from NodeSSPI and impose their own rules.
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
