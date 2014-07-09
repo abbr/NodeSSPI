@@ -58,7 +58,7 @@ npm install node-sspi
 npm install express
 node index.js
 ```
-then open *http://localhost:3000* and login with your Windows account, you will see something like
+then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
 ```
 Hello <mypc>\<me>! You belong to following groups:
 *<mypc>\None
