@@ -52,6 +52,27 @@ server.listen(port, function () {
   console.log('Express server listening on port %d in %s mode', port, app.get('env'));
 });
 ```
+If you put above code in a file say *index.js* and run following commands from the same directory:
+```
+npm install node-sspi
+npm install express
+node index.js
+```
+then open *http://localhost:3000* and login with your Windows account, you will see something like
+```
+Hello <mypc>\<me>! You belong to following groups:
+*<mypc>\None
+*\Everyone
+*<mypc>\HelpLibraryUpdaters
+*BUILTIN\Administrators
+*BUILTIN\Users
+*NT AUTHORITY\NETWORK
+*NT AUTHORITY\Authenticated Users
+*NT AUTHORITY\This Organization
+*NT AUTHORITY\NTLM Authentication
+*Mandatory Label\High Mandatory Level
+
+```
 
 ### Inputs
 
