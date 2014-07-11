@@ -101,7 +101,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
     *   If option `authoritative` is set to *ture*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
       *   403 if max login attempts are reached
       *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
-      *   500 when NodeSSPI encountered unknown exceptions.
+      *   500 when NodeSSPI encountered exception it cannot handle.
     *  If option `authoritative` is not set to *true*, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
