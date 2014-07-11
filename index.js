@@ -40,7 +40,7 @@ function main(opts) {
   this.opts = opts;
 }
 
-main.prototype.authenticate = function (req, res) {
+main.prototype.authenticate = function (req, res, cb) {
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
@@ -49,14 +49,17 @@ main.prototype.authenticate = function (req, res) {
   } catch (ex) {
     if (this.opts.authoritative) {
       res.end(ex);
+      cb();
       return;
     } else {
-      return ex;
+      cb(ex);
+      return;
     }
   }
   if (this.opts.authoritative && req.connection.user === undefined) {
     res.end();
   }
+  cb();
 }
 
 module.exports = main;

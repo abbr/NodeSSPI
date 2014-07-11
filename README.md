@@ -32,8 +32,9 @@ app.configure(function () {
     var nodeSSPIObj = new nodeSSPI({
       retrieveGroups: true
     });
-    nodeSSPIObj.authenticate(req, res);
-    res.finished || next();
+    nodeSSPIObj.authenticate(req, res, function(err){
+      res.finished || next();
+    });
   });
   app.use(function (req, res, next) {
     var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
@@ -102,7 +103,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
       *   403 if max login attempts are reached
       *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
       *   500 when NodeSSPI encountered exception it cannot handle.
-    *  If option `authoritative` is not set to *true*, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res);` rather than sending to response. This allows the caller and downstream middleware to make decision.
+    *  If option `authoritative` is not set to *true*, then response headers and `res.statusCode` will still be populated as described above, but NodeSSPI will not block the request, i.e. it will not call `res.end()`. Also, error message will be returned from calling `nodeSSPIObj.authenticate(req, res, cb(err){});` in the *err* callback parameter rather than sending to response. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
 NodeSSPI has been tested working on these Windows platforms:
