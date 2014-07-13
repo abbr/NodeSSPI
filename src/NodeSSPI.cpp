@@ -572,8 +572,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 	catch (NodeSSPIException& ex){
 		CleanupAuthenicationResources(conn, pServerCtx);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
-		Local<Value> err = Exception::Error(String::New(ex.what()));
-		Handle<Value> argv[] = {err};
+		Handle<Value> argv[] = {String::New(ex.what())};
 		if(opts->Get(String::New("authoritative"))->BooleanValue()){
 			res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 1, argv);
 		}
