@@ -6,10 +6,11 @@ var req = {
 };
 var res = {
   setHeader: function () {},
-  end: function(){}
+  end: function () {}
 };
 var nodeSSPIObj = new nodeSSPI({});
-nodeSSPIObj.authenticate(req, res, next);
-if (res.statusCode == 401) {
-  process.stdout.write('pass');
-}
+nodeSSPIObj.authenticate(req, res, function (err) {
+  if (res.statusCode == 401) {
+    process.stdout.write('pass');
+  }
+});

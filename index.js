@@ -44,22 +44,7 @@ main.prototype.authenticate = function (req, res, cb) {
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
-  try {
-    binding.authenticate(this.opts, req, res);
-  } catch (ex) {
-    if (this.opts.authoritative) {
-      res.end(ex);
-      cb();
-      return;
-    } else {
-      cb(ex);
-      return;
-    }
-  }
-  if (this.opts.authoritative && req.connection.user === undefined) {
-    res.end();
-  }
-  cb();
+  binding.authenticate(this.opts, req, res, cb);
 }
 
 module.exports = main;

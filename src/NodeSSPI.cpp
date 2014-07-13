@@ -495,22 +495,37 @@ void AddUserGroupsToConnection(HANDLE usertoken, Local<Object> conn)
 */
 Handle<Value> Authenticate(const Arguments& args) {
 	HandleScope scope;
+	auto opts = args[0]->ToObject();
+	auto res = args[2]->ToObject();
 	Local<Object> conn;
+	Local<Function> cb;
+	if(args[3]->IsFunction()) {
+		cb = Local<Function>::Cast(args[3]);
+	}
 	PCtxtHandle pServerCtx = NULL;
 	try{
 		auto req = args[1]->ToObject();
 		conn = req->Get(String::New("connection"))->ToObject();
 		if(conn->HasOwnProperty(String::New("user"))){
+			if(!cb.IsEmpty()) {
+				cb->Call(cb,0,NULL);
+			}
 			return scope.Close(Undefined());
 		}
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
 		}
-		auto opts = args[0]->ToObject();
-		auto res = args[2]->ToObject();
 		auto headers = req->Get(String::New("headers"))->ToObject(); 
 		if(!headers->Has(String::New("authorization"))){
 			note_sspi_auth_failure(opts,req,res);
+			if(opts->Get(String::New("authoritative"))->BooleanValue()
+				&& !req->Get(String::New("connection"))->ToObject()->Has(String::New("user"))
+				){
+					res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 0, NULL);
+			}
+			if(!cb.IsEmpty())  {
+				cb->Call(cb,0, NULL);
+			}
 			return scope.Close(Undefined());
 		}
 		auto aut = std::string(*String::AsciiValue(headers->Get(String::New("authorization"))));
@@ -557,8 +572,16 @@ Handle<Value> Authenticate(const Arguments& args) {
 	catch (NodeSSPIException& ex){
 		CleanupAuthenicationResources(conn, pServerCtx);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
-		// throw exception to js land
-		return v8::ThrowException(v8::String::New(ex.what()));
+		Local<Value> err = Exception::Error(String::New(ex.what()));
+		Handle<Value> argv[] = {err};
+		if(opts->Get(String::New("authoritative"))->BooleanValue()){
+			res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 1, argv);
+		}
+		if(!cb.IsEmpty())  cb->Call(cb,1,argv);
+		return scope.Close(Undefined());
+	}
+	if(!cb.IsEmpty()) {
+		cb->Call(cb,0,NULL);
 	}
 	return scope.Close(Undefined());
 }
