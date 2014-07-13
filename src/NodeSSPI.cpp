@@ -83,12 +83,13 @@ void note_sspi_auth_failure(const Local<Object> opts,const Local<Object> req,Loc
 void CleanupAuthenicationResources(Local<Object> conn
 	, PCtxtHandle pSvrCtxHdl = NULL)
 {
-	sspi_connection_rec *pSCR = 0;
-	PCtxtHandle outPch = 0;
 	if (conn->HasOwnProperty(String::New("svrCtx"))){
 		conn->Delete(String::New("svrCtx"));
 	}
-	pSvrCtxHdl && sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
+	if(pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
+		sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
+		pSvrCtxHdl->dwUpper = pSvrCtxHdl->dwLower = 0;
+	}
 }
 
 /*
@@ -276,131 +277,139 @@ void RetrieveUserGroups(PCtxtHandle * ppServerCtx, Local<Object> conn, Local<Obj
 
 void basic_authentication(const Local<Object> opts,const Local<Object> req
 	,Local<Object> res, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, PCtxtHandle pServerCtx){
-		std::string sspiPkg(sspiModuleInfo.defaultPackage);
-		if(opts->Has(String::New("sspiPackagesUsed"))){
-			auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
-			sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
-		}
-		ULONG tokSz = getMaxTokenSz(sspiPkg);
-		acquireServerCredential(sspiPkg);
-		// get domain, user name, password
-		*(pInToken+sz) = '\0';
-		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
-		if(opts->Has(String::New("domain"))){
-			domain = *String::AsciiValue(opts->Get(String::New("domain")));
-		}
-		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
-		if(domainNnm.find("\\") != std::string::npos){
-			domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
-			nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
-		}
-		else{
-			nm = domainNnm;
-		}
-		pswd = inStr.substr(inStr.find_first_of(":")+1);
-		// acquire client credential
-		CredHandle clientCred;
-		TimeStamp clientCredTs;
-		SEC_WINNT_AUTH_IDENTITY authIden;
-		authIden.Domain = (unsigned char *)domain.c_str();
-		authIden.DomainLength = domain.length();
-		authIden.User = (unsigned char *) nm.c_str();
-		authIden.UserLength = nm.length();
-		authIden.Password = (unsigned char *) pswd.c_str();
-		authIden.PasswordLength = pswd.length();
+	, ULONG sz){
+		CtxtHandle serverCtx = {0,0};
+		PCtxtHandle pServerCtx = &serverCtx;
+		try{
+			std::string sspiPkg(sspiModuleInfo.defaultPackage);
+			if(opts->Has(String::New("sspiPackagesUsed"))){
+				auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
+				sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
+			}
+			ULONG tokSz = getMaxTokenSz(sspiPkg);
+			acquireServerCredential(sspiPkg);
+			// get domain, user name, password
+			*(pInToken+sz) = '\0';
+			std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
+			if(opts->Has(String::New("domain"))){
+				domain = *String::AsciiValue(opts->Get(String::New("domain")));
+			}
+			domainNnm = inStr.substr(0,inStr.find_first_of(":"));
+			if(domainNnm.find("\\") != std::string::npos){
+				domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
+				nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
+			}
+			else{
+				nm = domainNnm;
+			}
+			pswd = inStr.substr(inStr.find_first_of(":")+1);
+			// acquire client credential
+			CredHandle clientCred;
+			TimeStamp clientCredTs;
+			SEC_WINNT_AUTH_IDENTITY authIden;
+			authIden.Domain = (unsigned char *)domain.c_str();
+			authIden.DomainLength = domain.length();
+			authIden.User = (unsigned char *) nm.c_str();
+			authIden.UserLength = nm.length();
+			authIden.Password = (unsigned char *) pswd.c_str();
+			authIden.PasswordLength = pswd.length();
 #ifdef UNICODE
-		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+			authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
 #else
-		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
+			authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
 #endif
-		if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
-			NULL,
-			(char*) sspiPkg.c_str(),
-			SECPKG_CRED_OUTBOUND,
-			NULL, &authIden, NULL, NULL,
-			&clientCred,
-			&clientCredTs) != SEC_E_OK){
-				throw NodeSSPIException("Cannot acquire client credential.");
-		};
+			if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
+				NULL,
+				(char*) sspiPkg.c_str(),
+				SECPKG_CRED_OUTBOUND,
+				NULL, &authIden, NULL, NULL,
+				&clientCred,
+				&clientCredTs) != SEC_E_OK){
+					throw NodeSSPIException("Cannot acquire client credential.");
+			};
 
-		// perform authentication loop
-		ULONG cbOut, cbIn;
-		BYTE *clientbuf = NULL;
-		ULONG ss;
-		unique_ptr<BYTE[]> pServerbuf(new BYTE[tokSz]), pClientBuf(new BYTE[tokSz]);
-		cbOut = 0;
-		CtxtHandle client_context = {0,0};
-		TimeStamp client_ctxtexpiry,server_ctxtexpiry;
-
-		do {
-			cbIn = cbOut;
-			cbOut = tokSz;
-			ss = gen_client_context(&clientCred, sspiPkg.c_str()
-				, clientbuf, &cbIn, &client_context, pServerbuf.get(), &cbOut, &client_ctxtexpiry);
-
-			if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
-				if (clientbuf == NULL) {
-					clientbuf = pClientBuf.get();
-				}
+			// perform authentication loop
+			ULONG cbOut, cbIn;
+			BYTE *clientbuf = NULL;
+			ULONG ss;
+			unique_ptr<BYTE[]> pServerbuf(new BYTE[tokSz]), pClientBuf(new BYTE[tokSz]);
+			cbOut = 0;
+			CtxtHandle client_context = {0,0};
+			TimeStamp client_ctxtexpiry,server_ctxtexpiry;
+			do {
 				cbIn = cbOut;
 				cbOut = tokSz;
-				ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
-					, &cbIn, pServerCtx, clientbuf, &cbOut, &server_ctxtexpiry);
-			}
-		} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
-		sspiModuleInfo.functable->DeleteSecurityContext(&client_context);
-		sspiModuleInfo.functable->FreeCredentialsHandle(&clientCred);
-		switch (ss) {
-		case SEC_E_OK:
-			{
-				// get user name
-				SecPkgContext_Names names;
-				SECURITY_STATUS ss;
-				char *retval = NULL;
+				ss = gen_client_context(&clientCred, sspiPkg.c_str()
+					, clientbuf, &cbIn, &client_context, pServerbuf.get(), &cbOut, &client_ctxtexpiry);
 
-				if ((ss = sspiModuleInfo.functable->QueryContextAttributes(pServerCtx, 
-					SECPKG_ATTR_NAMES, 
-					&names)
-					) == SEC_E_OK) {
-						conn->Set(String::New("user"),String::New(names.sUserName));
-						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
-						RetrieveUserGroups(&pServerCtx,conn,opts);
+				if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
+					if (clientbuf == NULL) {
+						clientbuf = pClientBuf.get();
+					}
+					cbIn = cbOut;
+					cbOut = tokSz;
+					ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
+						, &cbIn, pServerCtx, clientbuf, &cbOut, &server_ctxtexpiry);
 				}
-				else{
+			} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
+			sspiModuleInfo.functable->DeleteSecurityContext(&client_context);
+			sspiModuleInfo.functable->FreeCredentialsHandle(&clientCred);
+			switch (ss) {
+			case SEC_E_OK:
+				{
+					// get user name
+					SecPkgContext_Names names;
+					SECURITY_STATUS ss;
+					char *retval = NULL;
+
+					if ((ss = sspiModuleInfo.functable->QueryContextAttributes(pServerCtx, 
+						SECPKG_ATTR_NAMES, 
+						&names)
+						) == SEC_E_OK) {
+							conn->Set(String::New("user"),String::New(names.sUserName));
+							sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+							RetrieveUserGroups(&pServerCtx,conn,opts);
+					}
+					else{
+						CleanupAuthenicationResources(conn, pServerCtx);
+						throw NodeSSPIException("Cannot obtain user name.");
+					}
+					break;
+				}
+			case SEC_E_INVALID_HANDLE:
+			case SEC_E_INTERNAL_ERROR:
+			case SEC_E_NO_AUTHENTICATING_AUTHORITY:
+			case SEC_E_INSUFFICIENT_MEMORY:
+				{
 					CleanupAuthenicationResources(conn, pServerCtx);
-					throw NodeSSPIException("Cannot obtain user name.");
+					res->Set(String::New("statusCode"), Integer::New(500));
+					break;
 				}
-				break;
-			}
-		case SEC_E_INVALID_HANDLE:
-		case SEC_E_INTERNAL_ERROR:
-		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
-		case SEC_E_INSUFFICIENT_MEMORY:
-			{
-				CleanupAuthenicationResources(conn, pServerCtx);
-				res->Set(String::New("statusCode"), Integer::New(500));
-				break;
-			}
-		case SEC_E_INVALID_TOKEN:
-		case SEC_E_LOGON_DENIED:
-		default:
-			{
-				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn, pServerCtx);
-				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+			case SEC_E_INVALID_TOKEN:
+			case SEC_E_LOGON_DENIED:
+			default:
+				{
+					note_sspi_auth_failure(opts,req,res);
+					CleanupAuthenicationResources(conn, pServerCtx);
+					if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+						conn->Set(String::New("remainingAttempts")
+							,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+					}
+					int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+					if(remainingAttmpts<=0){
+						throw NodeSSPIException("Max login attempts reached.",403);
+					}
 					conn->Set(String::New("remainingAttempts")
-						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+						,Integer::New(remainingAttmpts-1));
+					break;
 				}
-				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
-				if(remainingAttmpts<=0){
-					throw NodeSSPIException("Max login attempts reached.",403);
-				}
-				conn->Set(String::New("remainingAttempts")
-					,Integer::New(remainingAttmpts-1));
-				break;
 			}
 		}
+		catch (NodeSSPIException& ex){
+			CleanupAuthenicationResources(conn,pServerCtx);
+			throw ex;
+		}
+
 }
 
 void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
@@ -415,7 +424,7 @@ void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req
 	,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, PCtxtHandle * ppServerCtx){
+	, ULONG sz){
 		ULONG tokSz = getMaxTokenSz(schema);
 		acquireServerCredential(schema);
 		// acquire server context from request.connection
@@ -441,7 +450,6 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 		}
 		outPch = &pSCR->server_context;
 		pTS = &pSCR->server_ctxtexpiry;
-		*ppServerCtx = outPch;
 		// call AcceptSecurityContext to generate server context
 		unique_ptr<BYTE[]> pOutBuf(new BYTE[tokSz]);
 		SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
@@ -503,7 +511,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 					) == SEC_E_OK) {
 						conn->Set(String::New("user"),String::New(names.sUserName));
 						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
-						RetrieveUserGroups(ppServerCtx,conn,opts);
+						RetrieveUserGroups(&outPch,conn,opts);
 				}
 				else{
 					CleanupAuthenicationResources(conn);
@@ -528,7 +536,6 @@ Handle<Value> Authenticate(const Arguments& args) {
 	if(args[3]->IsFunction()) {
 		cb = Local<Function>::Cast(args[3]);
 	}
-	PCtxtHandle pServerCtx = NULL;
 	try{
 		auto req = args[1]->ToObject();
 		conn = req->Get(String::New("connection"))->ToObject();
@@ -565,17 +572,15 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
-		CtxtHandle serverCtx = {0,0};
 		if(_stricmp(schema.c_str(),"basic")==0){
-			pServerCtx = &serverCtx;
-			basic_authentication(opts,req,res,conn, pToken.get(), sz, pServerCtx);
+			basic_authentication(opts,req,res,conn, pToken.get(), sz);
 		}
 		else{
-			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, &pServerCtx);
+			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz);
 		}
 	}
 	catch (NodeSSPIException& ex){
-		CleanupAuthenicationResources(conn, pServerCtx);
+		CleanupAuthenicationResources(conn);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
 		Handle<Value> argv[] = {String::New(ex.what())};
 		if(opts->Get(String::New("authoritative"))->BooleanValue()){
