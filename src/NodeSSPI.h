@@ -41,3 +41,14 @@ typedef struct {
     TimeStamp server_ctxtexpiry;
 } sspi_connection_rec;
 
+typedef struct  {
+    uv_work_t request;
+    v8::Persistent<v8::Function> callback;
+    int error_code;
+    std::string error_message;
+
+    // Custom data
+	v8::Persistent<v8::Object> req;
+	v8::Persistent<v8::Object> res;
+	v8::Persistent<v8::Object> conn;
+} Baton;
