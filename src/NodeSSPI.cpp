@@ -15,9 +15,7 @@ public:
 	UINT http_code;
 };
 
-class Baton  {
-public:
-	Baton();
+struct Baton  {
 	uv_work_t request;
 	v8::Persistent<v8::Function> callback;
 	//int error_code;
@@ -33,9 +31,12 @@ public:
 	ULONG ss;
 	std::string user;
 	bool retrieveGroups;
-	NodeSSPIException err;
+	NodeSSPIException * err;
 	std::vector<std::string> *pGroups;
 	PCtxtHandle pServerCtx;
+	BYTE *pInToken;
+	ULONG pInTokenSz;
+	sspi_connection_rec * pSCR;
 };
 
 void sspi_module_cleanup()
@@ -339,6 +340,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
 		sspiModuleInfo.functable->DeleteSecurityContext(&client_context);
 		sspiModuleInfo.functable->FreeCredentialsHandle(&clientCred);
+		pBaton->ss = ss;
 		if (ss == SEC_E_OK) {
 			// get user name
 			SecPkgContext_Names names;
@@ -362,7 +364,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		}
 	}
 	catch (NodeSSPIException& ex){
-		pBaton->err = ex;
+		pBaton->err = &ex;
 	}
 }
 
@@ -380,6 +382,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	case SEC_E_OK:
 		{
 			if (!pBaton->user.empty()) {
+				conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
 				if(pBaton->pGroups){
 					auto groups = v8::Array::New(pBaton->pGroups->size());
 					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
@@ -423,6 +426,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 			break;
 		}
 	}
+	// TODO: call the callback
 	pBaton->callback.Dispose();
 	delete pBaton;
 }
@@ -450,6 +454,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		else{
 			nm = domainNnm;
 		}
+		free(pInToken);
 		pswd = inStr.substr(inStr.find_first_of(":")+1);
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
@@ -465,7 +470,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
 #endif
 
-		// TODO: Make following code till end of function async
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
 		pBaton->callback = Persistent<Function>::New(cb);
@@ -489,15 +493,139 @@ void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
 	free(pSCR);
 }
 
+void AsyncSSPIAuth(uv_work_t* req){
+	Baton* pBaton = static_cast<Baton*>(req->data);
+	try{
+		PCtxtHandle pServerCtx = new CtxtHandle();
+		pServerCtx->dwLower = pServerCtx->dwUpper = 0;
+		pBaton->pServerCtx = pServerCtx;
+		std::string schema = pBaton->sspiPkg;
+		PCtxtHandle outPch = &pBaton->pSCR->server_context;
+		PTimeStamp pTS = &pBaton->pSCR->server_ctxtexpiry;
+
+		BYTE * pInToken = pBaton->pInToken;
+		ULONG sz = pBaton->pInTokenSz;
+		ULONG tokSz = getMaxTokenSz(schema);
+		// call AcceptSecurityContext to generate server context
+		BYTE * pOutBuf = new BYTE[tokSz];
+		SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
+			, pInToken, &sz, outPch, pOutBuf, &tokSz, pTS);
+		free(pInToken);
+		pBaton->pInToken = pOutBuf;
+		pBaton->pInTokenSz = tokSz;
+		if (ss == SEC_E_OK)
+		{
+			// get user name
+			SecPkgContext_Names names;
+			SECURITY_STATUS ss;
+			char *retval = NULL;
+
+			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(outPch, 
+				SECPKG_ATTR_NAMES, 
+				&names)
+				) == SEC_E_OK) {
+					pBaton->user = names.sUserName;
+					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+					if(pBaton->retrieveGroups){
+						pBaton->pGroups = new vector<std::string>();
+						RetrieveUserGroups(&pServerCtx,pBaton->pGroups);
+					}
+			}
+			else{
+				throw NodeSSPIException("Cannot obtain user name.");
+			}
+		}
+	}
+	catch (NodeSSPIException& ex){
+		pBaton->err = &ex;
+	}
+}
+
+void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
+	HandleScope scope;
+	Baton* pBaton = static_cast<Baton*>(uvReq->data);
+
+	ULONG ss = pBaton->ss;
+	v8::Persistent<v8::Object> conn = pBaton->conn;
+	v8::Persistent<v8::Object> req = pBaton->req;
+	v8::Persistent<v8::Object> res = pBaton->res;
+	v8::Persistent<v8::Object> opts = pBaton->opts;
+	ULONG tokSz = pBaton->pInTokenSz;
+	BYTE *  pOutBuf = pBaton->pInToken;
+	switch (ss) {
+	case SEC_I_COMPLETE_NEEDED:
+	case SEC_I_CONTINUE_NEEDED:
+	case SEC_I_COMPLETE_AND_CONTINUE: 
+		{
+			CStringA base64;
+			int base64Length = Base64EncodeGetRequiredLength(tokSz);
+			Base64Encode(pOutBuf,
+				tokSz,
+				base64.GetBufferSetLength(base64Length),
+				&base64Length, ATL_BASE64_FLAG_NOCRLF);
+			base64.ReleaseBufferSetLength(base64Length);
+			std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
+			Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
+			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+			res->Set(String::New("statusCode"), Integer::New(401));
+			break;
+		}
+	case SEC_E_INVALID_TOKEN:
+	case SEC_E_LOGON_DENIED:
+		{
+			note_sspi_auth_failure(opts,req,res);
+			CleanupAuthenicationResources(conn);
+			if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+				conn->Set(String::New("remainingAttempts")
+					,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+			}
+			int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+			if(remainingAttmpts<=0){
+				throw NodeSSPIException("Max login attempts reached.",403);
+			}
+			conn->Set(String::New("remainingAttempts")
+				,Integer::New(remainingAttmpts-1));
+			break;
+		}
+	case SEC_E_INVALID_HANDLE:
+	case SEC_E_INTERNAL_ERROR:
+	case SEC_E_NO_AUTHENTICATING_AUTHORITY:
+	case SEC_E_INSUFFICIENT_MEMORY:
+		{
+			CleanupAuthenicationResources(conn);
+			res->Set(String::New("statusCode"), Integer::New(500));
+			break;
+		}
+	case SEC_E_OK:
+		{
+			if (!pBaton->user.empty()) {
+				conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
+				if(pBaton->pGroups){
+					auto groups = v8::Array::New(pBaton->pGroups->size());
+					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
+						groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+					}
+					conn->Set(String::New("userGroups"),groups);
+					delete pBaton->pGroups;
+				}
+
+			}
+			else{
+				CleanupAuthenicationResources(conn);
+				throw NodeSSPIException("Cannot obtain user name.");
+			}
+			break;
+		}
+	}
+	free(pOutBuf);
+}
+
 void sspi_authentication(const Local<Object> opts,const Local<Object> req
 	,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
 	, ULONG sz, Local<Function> cb){
-		ULONG tokSz = getMaxTokenSz(schema);
 		acquireServerCredential(schema);
 		// acquire server context from request.connection
 		sspi_connection_rec *pSCR = 0;
-		PCtxtHandle outPch = 0;
-		PTimeStamp pTS;
 		if (conn->HasOwnProperty(String::New("svrCtx"))){
 			// this is not initial request
 			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
@@ -515,80 +643,21 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			obj.MakeWeak(pSCR,weakSvrCtxCallback);
 			conn->Set(String::New("svrCtx"), obj);
 		}
-		outPch = &pSCR->server_context;
-		pTS = &pSCR->server_ctxtexpiry;
 
 		// TODO: Make following code till end of function async
-		// call AcceptSecurityContext to generate server context
-		unique_ptr<BYTE[]> pOutBuf(new BYTE[tokSz]);
-		SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
-			, pInToken, &sz, outPch, pOutBuf.get(), &tokSz, pTS);
-		switch (ss) {
-		case SEC_I_COMPLETE_NEEDED:
-		case SEC_I_CONTINUE_NEEDED:
-		case SEC_I_COMPLETE_AND_CONTINUE: 
-			{
-				CStringA base64;
-				int base64Length = Base64EncodeGetRequiredLength(tokSz);
-				Base64Encode(pOutBuf.get(),
-					tokSz,
-					base64.GetBufferSetLength(base64Length),
-					&base64Length, ATL_BASE64_FLAG_NOCRLF);
-				base64.ReleaseBufferSetLength(base64Length);
-				std::string authHStr = schema + " " + std::string(base64.GetString());
-				Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
-				res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
-				res->Set(String::New("statusCode"), Integer::New(401));
-				break;
-			}
-		case SEC_E_INVALID_TOKEN:
-		case SEC_E_LOGON_DENIED:
-			{
-				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn);
-				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
-					conn->Set(String::New("remainingAttempts")
-						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
-				}
-				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
-				if(remainingAttmpts<=0){
-					throw NodeSSPIException("Max login attempts reached.",403);
-				}
-				conn->Set(String::New("remainingAttempts")
-					,Integer::New(remainingAttmpts-1));
-				break;
-			}
-		case SEC_E_INVALID_HANDLE:
-		case SEC_E_INTERNAL_ERROR:
-		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
-		case SEC_E_INSUFFICIENT_MEMORY:
-			{
-				CleanupAuthenicationResources(conn);
-				res->Set(String::New("statusCode"), Integer::New(500));
-				break;
-			}
-		case SEC_E_OK:
-			{
-				// get user name
-				SecPkgContext_Names names;
-				SECURITY_STATUS ss;
-				char *retval = NULL;
-
-				if ((ss = sspiModuleInfo.functable->QueryContextAttributes(outPch, 
-					SECPKG_ATTR_NAMES, 
-					&names)
-					) == SEC_E_OK) {
-						conn->Set(String::New("user"),String::New(names.sUserName));
-						sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
-						RetrieveUserGroups(&outPch,conn,opts);
-				}
-				else{
-					CleanupAuthenicationResources(conn);
-					throw NodeSSPIException("Cannot obtain user name.");
-				}
-				break;
-			}
-		}
+		Baton *pBaton = new Baton();
+		pBaton->request.data = pBaton;
+		pBaton->callback = Persistent<Function>::New(cb);
+		pBaton->req = Persistent<Object>::New(req);
+		pBaton->conn = Persistent<Object>::New(conn);
+		pBaton->res = Persistent<Object>::New(res);
+		pBaton->opts = Persistent<Object>::New(opts);
+		pBaton->sspiPkg = schema;
+		pBaton->pInToken = pInToken;
+		pBaton->pInTokenSz = sz;
+		pBaton->pSCR = pSCR;
+		uv_queue_work(uv_default_loop(), &pBaton->request,
+			AsyncSSPIAuth, AsyncAfterSSPIAuth);
 }
 
 /*
@@ -636,16 +705,16 @@ Handle<Value> Authenticate(const Arguments& args) {
 		ssin >> schema;
 		ssin >> strToken;
 		// base64 decode strToken
-		unique_ptr<BYTE[]> pToken(new BYTE[strToken.length()]);
+		BYTE * pToken = new BYTE[strToken.length()];
 		int sz = strToken.length();
-		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken.get(), &sz)){
+		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken, &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
 		if(_stricmp(schema.c_str(),"basic")==0){
-			basic_authentication(opts,req,res,conn, pToken.get(), sz, cb);
+			basic_authentication(opts,req,res,conn, pToken, sz, cb);
 		}
 		else{
-			sspi_authentication(opts,req,res,schema,conn, pToken.get(), sz, cb);
+			sspi_authentication(opts,req,res,schema,conn, pToken, sz, cb);
 		}
 	}
 	catch (NodeSSPIException& ex){
