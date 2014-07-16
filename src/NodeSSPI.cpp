@@ -373,11 +373,11 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 
 	ULONG ss = pBaton->ss;
-	v8::Persistent<v8::Object> conn = pBaton->conn;
-	v8::Persistent<v8::Object> req = pBaton->req;
-	v8::Persistent<v8::Object> res = pBaton->res;
-	v8::Persistent<v8::Object> opts = pBaton->opts;
-	PCtxtHandle pServerCtx = pBaton->pServerCtx;
+	auto conn = pBaton->conn;
+	auto req = pBaton->req;
+	auto res = pBaton->res;
+	auto opts = pBaton->opts;
+	auto pServerCtx = pBaton->pServerCtx;
 	switch (ss) {
 	case SEC_E_OK:
 		{
@@ -426,7 +426,13 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 			break;
 		}
 	}
-	// TODO: call the callback
+	// call the callback
+	if (pBaton->err) {
+		Handle<Value> argv[] = { String::New(pBaton->err->what())};
+		pBaton->callback->Call(pBaton->callback,1,argv);
+	} else {
+		pBaton->callback->Call(pBaton->callback,0,NULL);
+	}
 	pBaton->callback.Dispose();
 	delete pBaton;
 }
@@ -546,10 +552,10 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 
 	ULONG ss = pBaton->ss;
-	v8::Persistent<v8::Object> conn = pBaton->conn;
-	v8::Persistent<v8::Object> req = pBaton->req;
-	v8::Persistent<v8::Object> res = pBaton->res;
-	v8::Persistent<v8::Object> opts = pBaton->opts;
+	auto conn = pBaton->conn;
+	auto req = pBaton->req;
+	auto res = pBaton->res;
+	auto opts = pBaton->opts;
 	ULONG tokSz = pBaton->pInTokenSz;
 	BYTE *  pOutBuf = pBaton->pInToken;
 	switch (ss) {
@@ -618,6 +624,15 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		}
 	}
 	free(pOutBuf);
+	// call the callback
+	if (pBaton->err) {
+		Handle<Value> argv[] = { String::New(pBaton->err->what())};
+		pBaton->callback->Call(pBaton->callback,1,argv);
+	} else {
+		pBaton->callback->Call(pBaton->callback,0,NULL);
+	}
+	pBaton->callback.Dispose();
+	delete pBaton;
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req
@@ -644,7 +659,6 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			conn->Set(String::New("svrCtx"), obj);
 		}
 
-		// TODO: Make following code till end of function async
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
 		pBaton->callback = Persistent<Function>::New(cb);
