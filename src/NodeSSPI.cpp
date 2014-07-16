@@ -293,6 +293,25 @@ void RetrieveUserGroups(PCtxtHandle * ppServerCtx, vector<std::string> *pGroups)
 	AddUserGroupsToConnection(userToken, pGroups);
 }
 
+void WrapUpAsyncAfterAuth(Baton* pBaton){
+	// call the callback
+	if (pBaton->err) {
+		pBaton->res->Set(String::New("statusCode"), Integer::New(pBaton->err->http_code));
+		Handle<Value> argv[] = { String::New(pBaton->err->what())};
+
+		if(pBaton->opts->Get(String::New("authoritative"))->BooleanValue()){
+			pBaton->res->Get(String::New("end"))->ToObject()->CallAsFunction(pBaton->res, 1, argv);
+		}
+		if(!pBaton->callback.IsEmpty())  
+			pBaton->callback->Call(pBaton->callback,1,argv);
+	} else {
+		if(!pBaton->callback.IsEmpty())  
+			pBaton->callback->Call(pBaton->callback,0,NULL);
+	}
+	pBaton->callback.Dispose();
+	delete pBaton;
+}
+
 void AsyncBasicAuth(uv_work_t* req){
 	Baton* pBaton = static_cast<Baton*>(req->data);
 	try{
@@ -371,70 +390,67 @@ void AsyncBasicAuth(uv_work_t* req){
 void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
-
-	ULONG ss = pBaton->ss;
-	auto conn = pBaton->conn;
-	auto req = pBaton->req;
-	auto res = pBaton->res;
-	auto opts = pBaton->opts;
-	auto pServerCtx = pBaton->pServerCtx;
-	switch (ss) {
-	case SEC_E_OK:
-		{
-			if (!pBaton->user.empty()) {
-				conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
-				if(pBaton->pGroups){
-					auto groups = v8::Array::New(pBaton->pGroups->size());
-					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-						groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+	try{
+		ULONG ss = pBaton->ss;
+		auto conn = pBaton->conn;
+		auto req = pBaton->req;
+		auto res = pBaton->res;
+		auto opts = pBaton->opts;
+		auto pServerCtx = pBaton->pServerCtx;
+		switch (ss) {
+		case SEC_E_OK:
+			{
+				if (!pBaton->user.empty()) {
+					conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
+					if(pBaton->pGroups){
+						auto groups = v8::Array::New(pBaton->pGroups->size());
+						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
+							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+						}
+						conn->Set(String::New("userGroups"),groups);
+						delete pBaton->pGroups;
 					}
-					conn->Set(String::New("userGroups"),groups);
-					delete pBaton->pGroups;
 				}
+				else{
+					CleanupAuthenicationResources(conn , pServerCtx);
+					throw NodeSSPIException("Cannot obtain user name.");
+				}
+				break;
 			}
-			else{
-				CleanupAuthenicationResources(conn , pServerCtx);
-				throw NodeSSPIException("Cannot obtain user name.");
+		case SEC_E_INVALID_HANDLE:
+		case SEC_E_INTERNAL_ERROR:
+		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
+		case SEC_E_INSUFFICIENT_MEMORY:
+			{
+				CleanupAuthenicationResources(conn, pServerCtx);
+				res->Set(String::New("statusCode"), Integer::New(500));
+				break;
 			}
-			break;
-		}
-	case SEC_E_INVALID_HANDLE:
-	case SEC_E_INTERNAL_ERROR:
-	case SEC_E_NO_AUTHENTICATING_AUTHORITY:
-	case SEC_E_INSUFFICIENT_MEMORY:
-		{
-			CleanupAuthenicationResources(conn, pServerCtx);
-			res->Set(String::New("statusCode"), Integer::New(500));
-			break;
-		}
-	case SEC_E_INVALID_TOKEN:
-	case SEC_E_LOGON_DENIED:
-	default:
-		{
-			note_sspi_auth_failure(opts,req,res);
-			CleanupAuthenicationResources(conn, pServerCtx);
-			if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+		case SEC_E_INVALID_TOKEN:
+		case SEC_E_LOGON_DENIED:
+		default:
+			{
+				note_sspi_auth_failure(opts,req,res);
+				CleanupAuthenicationResources(conn, pServerCtx);
+				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+					conn->Set(String::New("remainingAttempts")
+						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+				}
+				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+				if(remainingAttmpts<=0){
+					throw NodeSSPIException("Max login attempts reached.",403);
+				}
 				conn->Set(String::New("remainingAttempts")
-					,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+					,Integer::New(remainingAttmpts-1));
+				break;
 			}
-			int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
-			if(remainingAttmpts<=0){
-				throw NodeSSPIException("Max login attempts reached.",403);
-			}
-			conn->Set(String::New("remainingAttempts")
-				,Integer::New(remainingAttmpts-1));
-			break;
 		}
 	}
-	// call the callback
-	if (pBaton->err) {
-		Handle<Value> argv[] = { String::New(pBaton->err->what())};
-		pBaton->callback->Call(pBaton->callback,1,argv);
-	} else {
-		pBaton->callback->Call(pBaton->callback,0,NULL);
+	catch (NodeSSPIException& ex){
+		pBaton->err = &ex;
 	}
-	pBaton->callback.Dispose();
-	delete pBaton;
+
+	WrapUpAsyncAfterAuth(pBaton);
 }
 
 void basic_authentication(const Local<Object> opts,const Local<Object> req
@@ -548,91 +564,86 @@ void AsyncSSPIAuth(uv_work_t* req){
 }
 
 void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
-	HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
-
-	ULONG ss = pBaton->ss;
-	auto conn = pBaton->conn;
-	auto req = pBaton->req;
-	auto res = pBaton->res;
-	auto opts = pBaton->opts;
-	ULONG tokSz = pBaton->pInTokenSz;
 	BYTE *  pOutBuf = pBaton->pInToken;
-	switch (ss) {
-	case SEC_I_COMPLETE_NEEDED:
-	case SEC_I_CONTINUE_NEEDED:
-	case SEC_I_COMPLETE_AND_CONTINUE: 
-		{
-			CStringA base64;
-			int base64Length = Base64EncodeGetRequiredLength(tokSz);
-			Base64Encode(pOutBuf,
-				tokSz,
-				base64.GetBufferSetLength(base64Length),
-				&base64Length, ATL_BASE64_FLAG_NOCRLF);
-			base64.ReleaseBufferSetLength(base64Length);
-			std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
-			Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
-			res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
-			res->Set(String::New("statusCode"), Integer::New(401));
-			break;
-		}
-	case SEC_E_INVALID_TOKEN:
-	case SEC_E_LOGON_DENIED:
-		{
-			note_sspi_auth_failure(opts,req,res);
-			CleanupAuthenicationResources(conn);
-			if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
-				conn->Set(String::New("remainingAttempts")
-					,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+	auto opts = pBaton->opts;
+	auto res = pBaton->res;
+	try{
+		ULONG ss = pBaton->ss;
+		auto conn = pBaton->conn;
+		auto req = pBaton->req;
+		ULONG tokSz = pBaton->pInTokenSz;
+		switch (ss) {
+		case SEC_I_COMPLETE_NEEDED:
+		case SEC_I_CONTINUE_NEEDED:
+		case SEC_I_COMPLETE_AND_CONTINUE: 
+			{
+				CStringA base64;
+				int base64Length = Base64EncodeGetRequiredLength(tokSz);
+				Base64Encode(pOutBuf,
+					tokSz,
+					base64.GetBufferSetLength(base64Length),
+					&base64Length, ATL_BASE64_FLAG_NOCRLF);
+				base64.ReleaseBufferSetLength(base64Length);
+				std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
+				Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
+				res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+				res->Set(String::New("statusCode"), Integer::New(401));
+				break;
 			}
-			int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
-			if(remainingAttmpts<=0){
-				throw NodeSSPIException("Max login attempts reached.",403);
-			}
-			conn->Set(String::New("remainingAttempts")
-				,Integer::New(remainingAttmpts-1));
-			break;
-		}
-	case SEC_E_INVALID_HANDLE:
-	case SEC_E_INTERNAL_ERROR:
-	case SEC_E_NO_AUTHENTICATING_AUTHORITY:
-	case SEC_E_INSUFFICIENT_MEMORY:
-		{
-			CleanupAuthenicationResources(conn);
-			res->Set(String::New("statusCode"), Integer::New(500));
-			break;
-		}
-	case SEC_E_OK:
-		{
-			if (!pBaton->user.empty()) {
-				conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
-				if(pBaton->pGroups){
-					auto groups = v8::Array::New(pBaton->pGroups->size());
-					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-						groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
-					}
-					conn->Set(String::New("userGroups"),groups);
-					delete pBaton->pGroups;
-				}
-
-			}
-			else{
+		case SEC_E_INVALID_TOKEN:
+		case SEC_E_LOGON_DENIED:
+			{
+				note_sspi_auth_failure(opts,req,res);
 				CleanupAuthenicationResources(conn);
-				throw NodeSSPIException("Cannot obtain user name.");
+				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
+					conn->Set(String::New("remainingAttempts")
+						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+				}
+				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+				if(remainingAttmpts<=0){
+					throw NodeSSPIException("Max login attempts reached.",403);
+				}
+				conn->Set(String::New("remainingAttempts")
+					,Integer::New(remainingAttmpts-1));
+				break;
 			}
-			break;
+		case SEC_E_INVALID_HANDLE:
+		case SEC_E_INTERNAL_ERROR:
+		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
+		case SEC_E_INSUFFICIENT_MEMORY:
+			{
+				CleanupAuthenicationResources(conn);
+				res->Set(String::New("statusCode"), Integer::New(500));
+				break;
+			}
+		case SEC_E_OK:
+			{
+				if (!pBaton->user.empty()) {
+					conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
+					if(pBaton->pGroups){
+						auto groups = v8::Array::New(pBaton->pGroups->size());
+						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
+							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+						}
+						conn->Set(String::New("userGroups"),groups);
+						delete pBaton->pGroups;
+					}
+
+				}
+				else{
+					CleanupAuthenicationResources(conn);
+					throw NodeSSPIException("Cannot obtain user name.");
+				}
+				break;
+			}
 		}
 	}
-	free(pOutBuf);
-	// call the callback
-	if (pBaton->err) {
-		Handle<Value> argv[] = { String::New(pBaton->err->what())};
-		pBaton->callback->Call(pBaton->callback,1,argv);
-	} else {
-		pBaton->callback->Call(pBaton->callback,0,NULL);
+	catch (NodeSSPIException& ex){
+		pBaton->err = &ex;
 	}
-	pBaton->callback.Dispose();
-	delete pBaton;
+	if(pOutBuf) free(pOutBuf);
+	WrapUpAsyncAfterAuth(pBaton);
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req
