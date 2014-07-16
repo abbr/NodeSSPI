@@ -15,7 +15,16 @@ public:
 	UINT http_code;
 };
 
-struct Baton  {
+class Baton  {
+public:
+	Baton(){
+		err = 0;
+		basicDomain = 0;
+	}
+	~Baton(){
+		if(basicDomain) free(basicDomain);
+	}
+
 	uv_work_t request;
 	v8::Persistent<v8::Function> callback;
 	//int error_code;
@@ -27,7 +36,6 @@ struct Baton  {
 	v8::Persistent<v8::Object> conn;
 	v8::Persistent<v8::Object> opts;
 	std::string sspiPkg;
-	SEC_WINNT_AUTH_IDENTITY authIden;
 	ULONG ss;
 	std::string user;
 	bool retrieveGroups;
@@ -36,7 +44,8 @@ struct Baton  {
 	PCtxtHandle pServerCtx;
 	BYTE *pInToken;
 	ULONG pInTokenSz;
-	sspi_connection_rec * pSCR;
+	sspi_connection_rec *pSCR;
+	std::string *basicDomain;
 };
 
 void sspi_module_cleanup()
@@ -315,11 +324,40 @@ void WrapUpAsyncAfterAuth(Baton* pBaton){
 void AsyncBasicAuth(uv_work_t* req){
 	Baton* pBaton = static_cast<Baton*>(req->data);
 	try{
+		std::string sspiPkg = pBaton->sspiPkg;
+		acquireServerCredential(sspiPkg);
+		BYTE * pInToken = pBaton->pInToken;
+		ULONG sz = pBaton->pInTokenSz;
+		// get domain, user name, password
+		*(pInToken+sz) = '\0';
+		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
+		if(pBaton->basicDomain) domain = *pBaton->basicDomain;
+		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
+		if(domainNnm.find("\\") != std::string::npos){
+			domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
+			nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
+		}
+		else{
+			nm = domainNnm;
+		}
+		free(pInToken);
+		pswd = inStr.substr(inStr.find_first_of(":")+1);
+		// acquire client credential
+		SEC_WINNT_AUTH_IDENTITY authIden;
+		authIden.Domain = (unsigned char *)domain.c_str();
+		authIden.DomainLength = domain.length();
+		authIden.User = (unsigned char *) nm.c_str();
+		authIden.UserLength = nm.length();
+		authIden.Password = (unsigned char *) pswd.c_str();
+		authIden.PasswordLength = pswd.length();
+#ifdef UNICODE
+		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+#else
+		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
+#endif
 		PCtxtHandle pServerCtx = new CtxtHandle();
 		pServerCtx->dwLower = pServerCtx->dwUpper = 0;
 		pBaton->pServerCtx = pServerCtx;
-		std::string sspiPkg = pBaton->sspiPkg;
-		SEC_WINNT_AUTH_IDENTITY authIden = pBaton->authIden;
 		ULONG tokSz = getMaxTokenSz(sspiPkg);
 		CredHandle clientCred;
 		TimeStamp clientCredTs;
@@ -461,37 +499,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 			auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
 			sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
 		}
-		acquireServerCredential(sspiPkg);
-		// get domain, user name, password
-		*(pInToken+sz) = '\0';
-		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
-		if(opts->Has(String::New("domain"))){
-			domain = *String::AsciiValue(opts->Get(String::New("domain")));
-		}
-		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
-		if(domainNnm.find("\\") != std::string::npos){
-			domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
-			nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
-		}
-		else{
-			nm = domainNnm;
-		}
-		free(pInToken);
-		pswd = inStr.substr(inStr.find_first_of(":")+1);
-		// acquire client credential
-		SEC_WINNT_AUTH_IDENTITY authIden;
-		authIden.Domain = (unsigned char *)domain.c_str();
-		authIden.DomainLength = domain.length();
-		authIden.User = (unsigned char *) nm.c_str();
-		authIden.UserLength = nm.length();
-		authIden.Password = (unsigned char *) pswd.c_str();
-		authIden.PasswordLength = pswd.length();
-#ifdef UNICODE
-		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
-#else
-		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
-#endif
-
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
 		pBaton->callback = Persistent<Function>::New(cb);
@@ -500,7 +507,11 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		pBaton->res = Persistent<Object>::New(res);
 		pBaton->opts = Persistent<Object>::New(opts);
 		pBaton->sspiPkg = sspiPkg;
-		pBaton->authIden = authIden;
+		pBaton->pInToken = pInToken;
+		pBaton->pInTokenSz = sz;
+		if(opts->Has(String::New("domain"))){
+			pBaton->basicDomain = new std::string(*String::AsciiValue(opts->Get(String::New("domain"))));
+		}
 		uv_queue_work(uv_default_loop(), &pBaton->request,
 			AsyncBasicAuth, AsyncAfterBasicAuth);
 }
