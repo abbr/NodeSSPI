@@ -338,7 +338,6 @@ void AsyncBasicAuth(uv_work_t* req){
 		BYTE * pInToken = pBaton->pInToken;
 		ULONG sz = pBaton->pInTokenSz;
 		// get domain, user name, password
-		*(pInToken+sz) = '\0';
 		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
 		if(pBaton->basicDomain) domain = *pBaton->basicDomain;
 		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
@@ -676,8 +675,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
 		}
 		else{
-			pSCR = static_cast<sspi_connection_rec *>(malloc(sizeof(sspi_connection_rec)));
-			SecureZeroMemory(pSCR,sizeof(sspi_connection_rec));
+			pSCR = static_cast<sspi_connection_rec *>(calloc(1,sizeof(sspi_connection_rec)));
 			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
 			svrCtx_templ->SetInternalFieldCount(1);
 			Persistent<Object> obj = Persistent<Object>::New(svrCtx_templ->NewInstance());
@@ -748,9 +746,9 @@ Handle<Value> Authenticate(const Arguments& args) {
 		ssin >> schema;
 		ssin >> strToken;
 		// base64 decode strToken
-		BYTE * pToken = new BYTE[strToken.length()];
 		int sz = strToken.length();
-		if (!Base64Decode(strToken.c_str(), strToken.length(), pToken, &sz)){
+		BYTE * pToken = static_cast<BYTE*>(calloc(sz,1));
+		if (!Base64Decode(strToken.c_str(), sz, pToken, &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
 		if(_stricmp(schema.c_str(),"basic")==0){
