@@ -19,12 +19,22 @@ class Baton  {
 public:
 	Baton(){
 		err = 0;
+		pGroups = 0;
 		basicDomain = 0;
+		pInToken = 0;
+		pSCR = 0;
 	}
 	~Baton(){
-		if(basicDomain) free(basicDomain);
+		if(!callback.IsEmpty())	callback.Dispose();
+		if(!req.IsEmpty()) req.Dispose();
+		if(!res.IsEmpty()) res.Dispose();
+		if(!conn.IsEmpty()) conn.Dispose();
+		if(!opts.IsEmpty()) opts.Dispose();
+		if(pGroups) delete pGroups;
+		if(err) delete err;
+		if(basicDomain) delete basicDomain;
+		if(pInToken) free(pInToken);
 	}
-
 	uv_work_t request;
 	v8::Persistent<v8::Function> callback;
 	//int error_code;
@@ -134,7 +144,7 @@ ULONG getMaxTokenSz(std::string pkgNm){
 			return sspiModuleInfo.pkgInfo[i].cbMaxToken;
 		}
 	}
-	throw NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
+	throw new NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
 }
 /*
 * Acquire sharable server credentials by schema honoring expiry timestamp
@@ -162,7 +172,7 @@ void acquireServerCredential(std::string schema){
 			, &credMap[schema].credHandl //phCredential
 			, &credMap[schema].exp //ptsExpiry
 			) != SEC_E_OK){
-				throw NodeSSPIException("Cannot get server credential");
+				throw new NodeSSPIException("Cannot get server credential");
 		}
 
 	}
@@ -289,15 +299,15 @@ void RetrieveUserGroups(PCtxtHandle * ppServerCtx, vector<std::string> *pGroups)
 	HANDLE userToken;
 	ULONG ss;
 	if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(*ppServerCtx)) != SEC_E_OK) {
-		throw NodeSSPIException("Cannot impersonate user.");
+		throw new NodeSSPIException("Cannot impersonate user.");
 	}
 
 	if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
 		sspiModuleInfo.functable->RevertSecurityContext(*ppServerCtx);
-		throw NodeSSPIException("Cannot obtain user token.");
+		throw new NodeSSPIException("Cannot obtain user token.");
 	}
 	if ((ss = sspiModuleInfo.functable->RevertSecurityContext(*ppServerCtx)) != SEC_E_OK) {
-		throw NodeSSPIException("Cannot revert security context.");
+		throw new NodeSSPIException("Cannot revert security context.");
 	}
 	AddUserGroupsToConnection(userToken, pGroups);
 }
@@ -317,7 +327,6 @@ void WrapUpAsyncAfterAuth(Baton* pBaton){
 		if(!pBaton->callback.IsEmpty())  
 			pBaton->callback->Call(pBaton->callback,0,NULL);
 	}
-	pBaton->callback.Dispose();
 	delete pBaton;
 }
 
@@ -340,7 +349,6 @@ void AsyncBasicAuth(uv_work_t* req){
 		else{
 			nm = domainNnm;
 		}
-		free(pInToken);
 		pswd = inStr.substr(inStr.find_first_of(":")+1);
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
@@ -368,7 +376,7 @@ void AsyncBasicAuth(uv_work_t* req){
 			NULL, &authIden, NULL, NULL,
 			&clientCred,
 			&clientCredTs) != SEC_E_OK){
-				throw NodeSSPIException("Cannot acquire client credential.");
+				throw new NodeSSPIException("Cannot acquire client credential.");
 		};
 
 		// perform authentication loop
@@ -416,12 +424,12 @@ void AsyncBasicAuth(uv_work_t* req){
 					}
 			}
 			else{
-				throw NodeSSPIException("Cannot obtain user name.");
+				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 		}
 	}
-	catch (NodeSSPIException& ex){
-		pBaton->err = &ex;
+	catch (NodeSSPIException *ex){
+		pBaton->err = ex;
 	}
 }
 
@@ -434,6 +442,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		auto req = pBaton->req;
 		auto res = pBaton->res;
 		auto opts = pBaton->opts;
+		if(pBaton->err) throw pBaton->err;
 		auto pServerCtx = pBaton->pServerCtx;
 		switch (ss) {
 		case SEC_E_OK:
@@ -446,12 +455,11 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
 						}
 						conn->Set(String::New("userGroups"),groups);
-						delete pBaton->pGroups;
 					}
 				}
 				else{
 					CleanupAuthenicationResources(conn , pServerCtx);
-					throw NodeSSPIException("Cannot obtain user name.");
+					throw new NodeSSPIException("Cannot obtain user name.");
 				}
 				break;
 			}
@@ -476,7 +484,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 				}
 				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
 				if(remainingAttmpts<=0){
-					throw NodeSSPIException("Max login attempts reached.",403);
+					throw new NodeSSPIException("Max login attempts reached.",403);
 				}
 				conn->Set(String::New("remainingAttempts")
 					,Integer::New(remainingAttmpts-1));
@@ -484,10 +492,9 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 			}
 		}
 	}
-	catch (NodeSSPIException& ex){
-		pBaton->err = &ex;
+	catch (NodeSSPIException *ex){
+		pBaton->err = ex;
 	}
-
 	WrapUpAsyncAfterAuth(pBaton);
 }
 
@@ -543,7 +550,6 @@ void AsyncSSPIAuth(uv_work_t* req){
 		BYTE * pOutBuf = new BYTE[tokSz];
 		SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
 			, pInToken, &sz, outPch, pOutBuf, &tokSz, pTS);
-		free(pInToken);
 		pBaton->pInToken = pOutBuf;
 		pBaton->pInTokenSz = tokSz;
 		if (ss == SEC_E_OK)
@@ -565,16 +571,17 @@ void AsyncSSPIAuth(uv_work_t* req){
 					}
 			}
 			else{
-				throw NodeSSPIException("Cannot obtain user name.");
+				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 		}
 	}
-	catch (NodeSSPIException& ex){
-		pBaton->err = &ex;
+	catch (NodeSSPIException *ex){
+		pBaton->err = ex;
 	}
 }
 
 void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
+	HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 	BYTE *  pOutBuf = pBaton->pInToken;
 	auto opts = pBaton->opts;
@@ -583,6 +590,7 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		ULONG ss = pBaton->ss;
 		auto conn = pBaton->conn;
 		auto req = pBaton->req;
+		if(pBaton->err) throw pBaton->err;
 		ULONG tokSz = pBaton->pInTokenSz;
 		switch (ss) {
 		case SEC_I_COMPLETE_NEEDED:
@@ -613,7 +621,7 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 				}
 				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
 				if(remainingAttmpts<=0){
-					throw NodeSSPIException("Max login attempts reached.",403);
+					throw new NodeSSPIException("Max login attempts reached.",403);
 				}
 				conn->Set(String::New("remainingAttempts")
 					,Integer::New(remainingAttmpts-1));
@@ -638,20 +646,19 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
 						}
 						conn->Set(String::New("userGroups"),groups);
-						delete pBaton->pGroups;
 					}
 
 				}
 				else{
 					CleanupAuthenicationResources(conn);
-					throw NodeSSPIException("Cannot obtain user name.");
+					throw new NodeSSPIException("Cannot obtain user name.");
 				}
 				break;
 			}
 		}
 	}
-	catch (NodeSSPIException& ex){
-		pBaton->err = &ex;
+	catch (NodeSSPIException *ex){
+		pBaton->err = ex;
 	}
 	if(pOutBuf) free(pOutBuf);
 	WrapUpAsyncAfterAuth(pBaton);
@@ -753,7 +760,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			sspi_authentication(opts,req,res,schema,conn, pToken, sz, cb);
 		}
 	}
-	catch (NodeSSPIException& ex){
+	catch (NodeSSPIException &ex){
 		CleanupAuthenicationResources(conn);
 		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
 		Handle<Value> argv[] = {String::New(ex.what())};
@@ -761,10 +768,6 @@ Handle<Value> Authenticate(const Arguments& args) {
 			res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 1, argv);
 		}
 		if(!cb.IsEmpty())  cb->Call(cb,1,argv);
-		return scope.Close(Undefined());
-	}
-	if(!cb.IsEmpty()) {
-		cb->Call(cb,0,NULL);
 	}
 	return scope.Close(Undefined());
 }
