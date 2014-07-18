@@ -498,6 +498,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	catch (NodeSSPIException *ex){
 		pBaton->err = ex;
 	}
+	// SCR doesn't span across requests for basic auth
 	delete pBaton->pSCR;
 	WrapUpAsyncAfterAuth(pBaton);
 }

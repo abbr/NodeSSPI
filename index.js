@@ -41,6 +41,10 @@ function main(opts) {
 }
 
 main.prototype.authenticate = function (req, res, cb) {
+  if (typeof cb !== 'function') {
+    res.statusCode = 500;
+    res.end('missing callback');
+  }
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
   }
