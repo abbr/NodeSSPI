@@ -51,7 +51,6 @@ public:
 	bool retrieveGroups;
 	NodeSSPIException * err;
 	std::vector<std::string> *pGroups;
-	PCtxtHandle pServerCtx;
 	BYTE *pInToken;
 	ULONG pInTokenSz;
 	sspi_connection_rec *pSCR;
@@ -362,9 +361,10 @@ void AsyncBasicAuth(uv_work_t* req){
 #else
 		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
 #endif
-		PCtxtHandle pServerCtx = new CtxtHandle();
-		pServerCtx->dwLower = pServerCtx->dwUpper = 0;
-		pBaton->pServerCtx = pServerCtx;
+		auto pSCR = new sspi_connection_rec();
+		auto pServerCtx = &pSCR->server_context;
+		pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
+		pBaton->pSCR = pSCR;
 		ULONG tokSz = getMaxTokenSz(sspiPkg);
 		CredHandle clientCred;
 		TimeStamp clientCredTs;
@@ -385,7 +385,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		unique_ptr<BYTE[]> pServerbuf(new BYTE[tokSz]), pClientBuf(new BYTE[tokSz]);
 		cbOut = 0;
 		CtxtHandle client_context = {0,0};
-		TimeStamp client_ctxtexpiry,server_ctxtexpiry;
+		TimeStamp client_ctxtexpiry;
 		do {
 			cbIn = cbOut;
 			cbOut = tokSz;
@@ -399,7 +399,7 @@ void AsyncBasicAuth(uv_work_t* req){
 				cbIn = cbOut;
 				cbOut = tokSz;
 				ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
-					, &cbIn, pServerCtx, clientbuf, &cbOut, &server_ctxtexpiry);
+					, &cbIn, pServerCtx, clientbuf, &cbOut, &pSCR->server_ctxtexpiry);
 			}
 		} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
 		sspiModuleInfo.functable->DeleteSecurityContext(&client_context);
@@ -442,7 +442,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		auto res = pBaton->res;
 		auto opts = pBaton->opts;
 		if(pBaton->err) throw pBaton->err;
-		auto pServerCtx = pBaton->pServerCtx;
+		auto pServerCtx = &pBaton->pSCR->server_context;
 		switch (ss) {
 		case SEC_E_OK:
 			{
@@ -535,10 +535,8 @@ void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
 void AsyncSSPIAuth(uv_work_t* req){
 	Baton* pBaton = static_cast<Baton*>(req->data);
 	try{
-		PCtxtHandle pServerCtx = new CtxtHandle();
-		pServerCtx->dwLower = pServerCtx->dwUpper = 0;
-		pBaton->pServerCtx = pServerCtx;
 		std::string schema = pBaton->sspiPkg;
+		acquireServerCredential(schema);
 		PCtxtHandle outPch = &pBaton->pSCR->server_context;
 		PTimeStamp pTS = &pBaton->pSCR->server_ctxtexpiry;
 
@@ -547,8 +545,10 @@ void AsyncSSPIAuth(uv_work_t* req){
 		ULONG tokSz = getMaxTokenSz(schema);
 		// call AcceptSecurityContext to generate server context
 		BYTE * pOutBuf = new BYTE[tokSz];
-		SECURITY_STATUS ss = gen_server_context(&credMap[schema].credHandl
+		ULONG ss = gen_server_context(&credMap[schema].credHandl
 			, pInToken, &sz, outPch, pOutBuf, &tokSz, pTS);
+		pBaton->ss = ss;
+		if(pBaton->pInToken) free(pBaton->pInToken);
 		pBaton->pInToken = pOutBuf;
 		pBaton->pInTokenSz = tokSz;
 		if (ss == SEC_E_OK)
@@ -566,7 +566,7 @@ void AsyncSSPIAuth(uv_work_t* req){
 					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 					if(pBaton->retrieveGroups){
 						pBaton->pGroups = new vector<std::string>();
-						RetrieveUserGroups(&pServerCtx,pBaton->pGroups);
+						RetrieveUserGroups(&outPch,pBaton->pGroups);
 					}
 			}
 			else{
@@ -659,14 +659,12 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 	catch (NodeSSPIException *ex){
 		pBaton->err = ex;
 	}
-	if(pOutBuf) free(pOutBuf);
 	WrapUpAsyncAfterAuth(pBaton);
 }
 
 void sspi_authentication(const Local<Object> opts,const Local<Object> req
 	,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
 	, ULONG sz, Local<Function> cb){
-		acquireServerCredential(schema);
 		// acquire server context from request.connection
 		sspi_connection_rec *pSCR = 0;
 		if (conn->HasOwnProperty(String::New("svrCtx"))){
