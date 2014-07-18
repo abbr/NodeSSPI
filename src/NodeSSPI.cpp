@@ -293,22 +293,28 @@ void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
 	free(groupinfo );
 }
 
-void RetrieveUserGroups(PCtxtHandle * ppServerCtx, vector<std::string> *pGroups){
+void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups){
 	// Retrieve user groups if requested, then call CleanupAuthenicationResources
 	HANDLE userToken;
 	ULONG ss;
-	if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(*ppServerCtx)) != SEC_E_OK) {
-		throw new NodeSSPIException("Cannot impersonate user.");
-	}
+	try{
+		if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
+			throw new NodeSSPIException("Cannot impersonate user.");
+		}
 
-	if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
-		sspiModuleInfo.functable->RevertSecurityContext(*ppServerCtx);
-		throw new NodeSSPIException("Cannot obtain user token.");
+		if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY_SOURCE | TOKEN_READ, TRUE, &userToken)) {
+			sspiModuleInfo.functable->RevertSecurityContext(pServerCtx);
+			throw new NodeSSPIException("Cannot obtain user token.");
+		}
+		if ((ss = sspiModuleInfo.functable->RevertSecurityContext(pServerCtx)) != SEC_E_OK) {
+			throw new NodeSSPIException("Cannot revert security context.");
+		}
+		AddUserGroupsToConnection(userToken, pGroups);
 	}
-	if ((ss = sspiModuleInfo.functable->RevertSecurityContext(*ppServerCtx)) != SEC_E_OK) {
-		throw new NodeSSPIException("Cannot revert security context.");
+	catch(...){
+		CloseHandle(userToken);
+		throw;
 	}
-	AddUserGroupsToConnection(userToken, pGroups);
 }
 
 void WrapUpAsyncAfterAuth(Baton* pBaton){
@@ -419,7 +425,7 @@ void AsyncBasicAuth(uv_work_t* req){
 					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 					if(pBaton->retrieveGroups){
 						pBaton->pGroups = new vector<std::string>();
-						RetrieveUserGroups(&pServerCtx,pBaton->pGroups);
+						RetrieveUserGroups(pServerCtx,pBaton->pGroups);
 					}
 			}
 			else{
@@ -443,6 +449,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		auto opts = pBaton->opts;
 		if(pBaton->err) throw pBaton->err;
 		auto pServerCtx = &pBaton->pSCR->server_context;
+		CleanupAuthenicationResources(conn , pServerCtx);
 		switch (ss) {
 		case SEC_E_OK:
 			{
@@ -457,7 +464,6 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 					}
 				}
 				else{
-					CleanupAuthenicationResources(conn , pServerCtx);
 					throw new NodeSSPIException("Cannot obtain user name.");
 				}
 				break;
@@ -467,7 +473,6 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 			{
-				CleanupAuthenicationResources(conn, pServerCtx);
 				res->Set(String::New("statusCode"), Integer::New(500));
 				break;
 			}
@@ -476,7 +481,6 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		default:
 			{
 				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn, pServerCtx);
 				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
 					conn->Set(String::New("remainingAttempts")
 						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
@@ -528,8 +532,10 @@ void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
 	sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *> (parameter);
 	if(!pSCR) return;
 	PCtxtHandle outPch =  &pSCR->server_context;
-	SECURITY_STATUS ss = sspiModuleInfo.functable->DeleteSecurityContext(outPch);
-	outPch->dwLower = outPch->dwUpper = 0;
+	if(outPch && outPch->dwLower >0 && outPch->dwUpper >0){
+		sspiModuleInfo.functable->DeleteSecurityContext(outPch);
+		outPch->dwLower = outPch->dwUpper = 0;
+	}
 	delete pSCR;
 }
 
@@ -567,7 +573,7 @@ void AsyncSSPIAuth(uv_work_t* req){
 					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 					if(pBaton->retrieveGroups){
 						pBaton->pGroups = new vector<std::string>();
-						RetrieveUserGroups(&outPch,pBaton->pGroups);
+						RetrieveUserGroups(outPch,pBaton->pGroups);
 					}
 			}
 			else{
@@ -614,7 +620,7 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_LOGON_DENIED:
 			{
 				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn);
+				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
 				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
 					conn->Set(String::New("remainingAttempts")
 						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
@@ -632,12 +638,13 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 			{
-				CleanupAuthenicationResources(conn);
+				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
 				res->Set(String::New("statusCode"), Integer::New(500));
 				break;
 			}
 		case SEC_E_OK:
 			{
+				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
 				if (!pBaton->user.empty()) {
 					conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
 					if(pBaton->pGroups){
@@ -650,7 +657,6 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 
 				}
 				else{
-					CleanupAuthenicationResources(conn);
 					throw new NodeSSPIException("Cannot obtain user name.");
 				}
 				break;
