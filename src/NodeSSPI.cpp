@@ -494,6 +494,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	catch (NodeSSPIException *ex){
 		pBaton->err = ex;
 	}
+	delete pBaton->pSCR;
 	WrapUpAsyncAfterAuth(pBaton);
 }
 
@@ -529,7 +530,7 @@ void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
 	PCtxtHandle outPch =  &pSCR->server_context;
 	SECURITY_STATUS ss = sspiModuleInfo.functable->DeleteSecurityContext(outPch);
 	outPch->dwLower = outPch->dwUpper = 0;
-	free(pSCR);
+	delete pSCR;
 }
 
 void AsyncSSPIAuth(uv_work_t* req){
@@ -673,7 +674,8 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
 		}
 		else{
-			pSCR = static_cast<sspi_connection_rec *>(calloc(1,sizeof(sspi_connection_rec)));
+			pSCR = new sspi_connection_rec();
+			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
 			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
 			svrCtx_templ->SetInternalFieldCount(1);
 			Persistent<Object> obj = Persistent<Object>::New(svrCtx_templ->NewInstance());
