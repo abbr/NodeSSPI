@@ -5,7 +5,7 @@ var req = {
     'authorization': 'BASIC dGVzdDp0ZXN0'
   },
   connection: {},
-  isTesting: true
+  isTestingNodeSSPI: true
 };
 var res = {
   setHeader: function () {},

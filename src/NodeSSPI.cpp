@@ -525,8 +525,8 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
 		pBaton->retrieveGroups = opts->Get(String::New("retrieveGroups"))->BooleanValue();
-		if(req->HasOwnProperty(String::New("isTesting")) 
-			&& req->Get(String::New("isTesting"))->BooleanValue()){
+		if(req->HasOwnProperty(String::New("isTestingNodeSSPI")) 
+			&& req->Get(String::New("isTestingNodeSSPI"))->BooleanValue()){
 				pBaton->isTesting = true;
 		}
 		if(opts->Has(String::New("domain"))){
