@@ -23,6 +23,7 @@ public:
 		basicDomain = 0;
 		pInToken = 0;
 		pSCR = 0;
+		isTesting = false;
 	}
 	~Baton(){
 		if(!callback.IsEmpty())	callback.Dispose();
@@ -55,6 +56,8 @@ public:
 	ULONG pInTokenSz;
 	sspi_connection_rec *pSCR;
 	std::string *basicDomain;
+	// are we running module installation testing?
+	bool isTesting;
 };
 
 void sspi_module_cleanup()
@@ -378,7 +381,7 @@ void AsyncBasicAuth(uv_work_t* req){
 			NULL,
 			(char*) sspiPkg.c_str(),
 			SECPKG_CRED_OUTBOUND,
-			NULL, &authIden, NULL, NULL,
+			NULL, ((pBaton->isTesting)?NULL:&authIden), NULL, NULL,
 			&clientCred,
 			&clientCredTs) != SEC_E_OK){
 				throw new NodeSSPIException("Cannot acquire client credential.");
@@ -521,6 +524,11 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		pBaton->sspiPkg = sspiPkg;
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
+		pBaton->retrieveGroups = opts->Get(String::New("retrieveGroups"))->BooleanValue();
+		if(req->HasOwnProperty(String::New("isTesting")) 
+			&& req->Get(String::New("isTesting"))->BooleanValue()){
+				pBaton->isTesting = true;
+		}
 		if(opts->Has(String::New("domain"))){
 			pBaton->basicDomain = new std::string(*String::AsciiValue(opts->Get(String::New("domain"))));
 		}
@@ -704,6 +712,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
 		pBaton->pSCR = pSCR;
+		pBaton->retrieveGroups = opts->Get(String::New("retrieveGroups"))->BooleanValue();
 		uv_queue_work(uv_default_loop(), &pBaton->request,
 			AsyncSSPIAuth, AsyncAfterSSPIAuth);
 }

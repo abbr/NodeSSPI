@@ -1,16 +1,21 @@
 var nodeSSPI = require('./index.js');
 var next = {};
 var req = {
-  headers: {},
-  connection: {}
+  headers: {
+    'authorization': 'BASIC dGVzdDp0ZXN0'
+  },
+  connection: {},
+  isTesting: true
 };
 var res = {
   setHeader: function () {},
   end: function () {}
 };
-var nodeSSPIObj = new nodeSSPI({});
+var nodeSSPIObj = new nodeSSPI({
+  'retrieveGroups': true
+});
 nodeSSPIObj.authenticate(req, res, function (err) {
-  if (res.statusCode == 401) {
+  if (req.connection.userGroups.indexOf('\\Everyone') >= 0) {
     process.stdout.write('pass');
   }
 });
