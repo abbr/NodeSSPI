@@ -87,7 +87,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
-      - default to *false*. Whether to retrieve groups upon successful authentication. 
+      - default to *false* for performance sake. Whether to retrieve groups upon successful authentication. 
   * maxLoginAttemptsPerConnection: &lt;number&gt;
       - default to *3*. How many login attempts are permitted for this connection.
   * sspiPackagesUsed: &lt;array&gt;
