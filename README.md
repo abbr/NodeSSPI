@@ -4,7 +4,7 @@ NodeSSPI
 NodeSSPI to Node.js is what [mod-auth-sspi](https://code.google.com/p/mod-auth-sspi/) to Apache HTTPD. In a nutshell NodeSSPI authenticates incoming HTTP(S) requests through native Windows SSPI, hence **NodeSSPI runs on Windows only**.
 
 ## Background
-Organizations using Microsoft Active Directory for identity management often rely on NTLM and Kerberos - collectively known as Windows authentiaton, as Single-Sign-On (SSO) solution to secure various corporate web sites. Windows authentication also offers the convinence of transparent authentication by default for browsers such as Internet Explorer and Google Chrome when running on corporate Windows computers configured by group policy.
+Organizations using Microsoft Active Directory for enterprise-wide identity management often rely on NTLM and Kerberos - collectively known as Windows authentication, as Single-Sign-On (SSO) solution to secure various corporate web sites. Windows authentication also offers the convenience of transparent authentication by default for browsers such as Internet Explorer and Google Chrome when running on corporate Windows computers configured by group policy.
 
 Arguably the most popular web server that supports Windows authentication is IIS. Apache HTTPD with module mod-auth-sspi is also a common choice, especially when used as reverse proxy (r-proxy). For Node.js to be useful in such enterprise environment, it is necessary to put Node.js behind one of these web servers to rely on them handling authentication. But this infrastructural layout defeated the design benefits of Node.js - a high performance non-blocking I/O web server more suitable acting as r-proxy than other servers mentioned in front of it.
 
@@ -12,7 +12,7 @@ This paradox has been impeding adoption of Node.js to the enterprise world, unti
 
 ## Description
 
-NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authencation, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
+NodeSSPI, written mostly in C++, is modeled after mod-auth-sspi to perform Windows authentication through native Windows SSPI. NodeSSPI also supports Basic authentication against underlying Active Directory (for domain servers only) and local users (for domain and non-domain servers). After successful authentication, NodeSSPI can optionally retrieve a list of groups the user belongs to, facilitating downstream middleware to perform authorization.
 
 Despite of the resemblance, NodeSSPI is not an exact feature-wize like-for-like porting of mod-auth-sspi. This is partially because, unlike Apache, which is customizable mostly through configuration, Node.js is customizable through JavaScript which offers much more flexibility.
 
@@ -53,7 +53,7 @@ server.listen(port, function () {
   console.log('Express server listening on port %d in %s mode', port, app.get('env'));
 });
 ```
-If you put above code in a file say *index.js* and run following commands from the same directory:
+If you put above code in a file, say *index.js*, and run following commands from the same directory:
 ```
 npm install node-sspi
 npm install express@3.4.3
@@ -81,9 +81,9 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * offerSSPI: true|false 
       - default to *true*. Whether to offer SSPI Windows authentication
   * offerBasic: true|false 
-      - default to *true*. Whether to offer Basic authenication
+      - default to *true*. Whether to offer Basic authentication
   * authoritative: true|false 
-      -  default to *ture*. Whether authentication performed by NodeSSPI is authoritative. If set to *true*, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to *false*, there is no such guarantee and downstream middleware have the chance to override outputs from NodeSSPI and impose their own rules.
+      -  default to *true*. Whether authentication performed by NodeSSPI is authoritative. If set to *true*, then requests passed to downstream are guaranteed to be authenticated because non-authenticated requests will be blocked. If set to *false*, there is no such guarantee and downstream middleware have the chance to override outputs from NodeSSPI and impose their own rules.
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
@@ -99,7 +99,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * Upon successful authentication, authenticated user name is populated into field `req.connection.user` 
     *   If option `retrieveGroups` is *true*, group names are populated into field `req.connection.userGroups` as an array.
   * Otherwise
-    *   If option `authoritative` is set to *ture*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body as well as the *err* parameter of the callback function. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
+    *   If option `authoritative` is set to *true*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body as well as the *err* parameter of the callback function. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
       *   403 if max login attempts are reached
       *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
       *   500 when NodeSSPI encountered exception it cannot handle.
