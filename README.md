@@ -91,7 +91,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * maxLoginAttemptsPerConnection: &lt;number&gt;
       - default to *3*. How many login attempts are permitted for this connection.
   * sspiPackagesUsed: &lt;array&gt;
-      - default to *['NTLM']*. An array of SSPI packages used.
+      - default to *['NTLM']*. An array of SSPI packages used. To obtain a list of all SSPI packages available on your server, download source code of [mod-auth-sspi](https://code.google.com/p/mod-auth-sspi/source/checkout), then run *bin\sspikgs.exe* from your server's DOS console. 
   * domain: &lt;string&gt;
       - no default value. This is the domain name (a.k.a realm) used by basic authentication if user doesn't prefix their login name with *&lt;domain_name&gt;\\*. 
 
