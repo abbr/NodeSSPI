@@ -25,3 +25,4 @@ bin/
 src/Debug/
 
 node_modules/
+.c9/

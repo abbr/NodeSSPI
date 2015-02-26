@@ -15,7 +15,7 @@ var nodeSSPIObj = new nodeSSPI({
   'retrieveGroups': true
 });
 nodeSSPIObj.authenticate(req, res, function (err) {
-  if (req.connection.userGroups.indexOf('\\Everyone') >= 0) {
+  if (req.connection.userGroups && req.connection.userGroups.length >= 0) {
     process.stdout.write('pass');
   }
 });
