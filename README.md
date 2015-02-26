@@ -106,7 +106,8 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
     *  If option `authoritative` is not set to *true*, then the output is the same as authoritative except NodeSSPI will not write error message to response body, nor block the request, i.e. it will not call `res.end(err)`. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
-NodeSSPI has been tested working on these Windows platforms:
+NodeSSPI has been tested working on these Windows platforms runing Node v0.10.x:
+
   * Windows Vista x32
   * Windows 7 x64
   * Windows Server 2008 R2
