@@ -8,14 +8,14 @@ var req = {
   isTestingNodeSSPI: true
 };
 var res = {
-  setHeader: function () {},
-  end: function () {}
+  setHeader: function() {},
+  end: function() {}
 };
 var nodeSSPIObj = new nodeSSPI({
   'retrieveGroups': true
 });
-nodeSSPIObj.authenticate(req, res, function (err) {
-  if (req.connection.userGroups && req.connection.userGroups.length >= 0) {
+nodeSSPIObj.authenticate(req, res, function(err) {
+  if (req.connection.userGroups && req.connection.userGroups.length > 0) {
     process.stdout.write('pass');
   }
 });
