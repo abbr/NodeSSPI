@@ -730,7 +730,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 * args[1]: req
 * args[2]: res
 */
-Handle<Value> Authenticate(const Arguments& args) {
+NAN_METHOD(Authenticate) {
 	NanScope();
 	auto opts = args[0]->ToObject();
 	auto res = args[2]->ToObject();
@@ -746,7 +746,7 @@ Handle<Value> Authenticate(const Arguments& args) {
 			if(!cb.IsEmpty()) {
 				cb->Call(cb,0,NULL);
 			}
-			return scope.Close(Undefined());
+			NanReturnUndefined();
 		}
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
@@ -762,9 +762,9 @@ Handle<Value> Authenticate(const Arguments& args) {
 			if(!cb.IsEmpty())  {
 				cb->Call(cb,0, NULL);
 			}
-			return scope.Close(Undefined());
+			NanReturnUndefined();
 		}
-		auto aut = std::string(*String::AsciiValue(headers->Get(NanNew<String>("authorization"))));
+		auto aut = std::string(*String::Utf8Value(headers->Get(NanNew<String>("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
@@ -791,13 +791,13 @@ Handle<Value> Authenticate(const Arguments& args) {
 		}
 		if(!cb.IsEmpty())  cb->Call(cb,1,argv);
 	}
-	return scope.Close(Undefined());
+	NanReturnUndefined();
 }
 
 void init(Handle<Object> exports) {
 	init_module();
-	exports->Set(String::NewSymbol("authenticate"),
-		FunctionTemplate::New(Authenticate)->GetFunction());
+	exports->Set(NanNew<String>("authenticate"),
+		NanNew<FunctionTemplate>(Authenticate)->GetFunction());
 }
 
 NODE_MODULE(nodeSSPI, init)
