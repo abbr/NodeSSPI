@@ -26,11 +26,11 @@ public:
 		isTesting = false;
 	}
 	~Baton(){
-		if(!callback.IsEmpty())	callback.Dispose();
-		if(!req.IsEmpty()) req.Dispose();
-		if(!res.IsEmpty()) res.Dispose();
-		if(!conn.IsEmpty()) conn.Dispose();
-		if(!opts.IsEmpty()) opts.Dispose();
+		if(!callback.IsEmpty())	NanDisposePersistent(callback);
+		if(!req.IsEmpty()) NanDisposePersistent(req);
+		if(!res.IsEmpty()) NanDisposePersistent(res);
+		if(!conn.IsEmpty()) NanDisposePersistent(conn);
+		if(!opts.IsEmpty()) NanDisposePersistent(opts);
 		if(pGroups) delete pGroups;
 		if(err) delete err;
 		if(basicDomain) delete basicDomain;
@@ -95,41 +95,41 @@ void note_sspi_auth_failure(const Handle<Object> opts,const Handle<Object> req,H
 	int nWays = 0;
 	int nSSPIPkgs = 0;
 	bool offerBasic = false, offerSSPI = false;
-	if(opts->Get(String::New("offerBasic"))->BooleanValue()){
+	if(opts->Get(NanNew<String>("offerBasic"))->BooleanValue()){
 		offerBasic = true;
 		nWays += 1;
 	}
-	if(opts->Get(String::New("offerSSPI"))->BooleanValue()){
+	if(opts->Get(NanNew<String>("offerSSPI"))->BooleanValue()){
 		offerSSPI = true;
-		nSSPIPkgs = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(String::New("length"))->ToInteger()->Uint32Value();
+		nSSPIPkgs = opts->Get(NanNew<String>("sspiPackagesUsed"))->ToObject()->Get(NanNew<String>("length"))->ToInteger()->Uint32Value();
 		nWays += nSSPIPkgs;
 	}
-	auto authHArr = v8::Array::New(nWays);
+	auto authHArr = NanNew<v8::Array>(nWays);
 	int curIdx = 0;
 	if(offerBasic){
 		std::string basicStr("Basic");
-		if(opts->Has(String::New("domain"))){
+		if(opts->Has(NanNew<String>("domain"))){
 			basicStr += " realm=\"";
-			basicStr += std::string(*String::AsciiValue(opts->Get(String::New("domain"))));
+			basicStr += std::string(*NanAsciiString(opts->Get(NanNew<String>("domain"))));
 			basicStr += "\"";
 		}
-		authHArr->Set(curIdx++, String::New(basicStr.c_str()));
+		authHArr->Set(curIdx++, NanNew<String>(basicStr.c_str()));
 	}
 	if(offerSSPI){
 		for(int i =0;i<nSSPIPkgs;i++){
-			authHArr->Set(curIdx++,opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(i));
+			authHArr->Set(curIdx++,opts->Get(NanNew<String>("sspiPackagesUsed"))->ToObject()->Get(i));
 		}
 	}
-	Handle<Value> argv[] = { String::New("WWW-Authenticate"), authHArr };
-	res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
-	res->Set(String::New("statusCode"),Integer::New(401));
+	Handle<Value> argv[] = { NanNew<String>("WWW-Authenticate"), authHArr };
+	res->Get(NanNew<String>("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+	res->Set(NanNew<String>("statusCode"),NanNew<Integer>(401));
 }
 
 void CleanupAuthenicationResources(Handle<Object> conn
 	, PCtxtHandle pSvrCtxHdl = NULL)
 {
-	if (conn->HasOwnProperty(String::New("svrCtx"))){
-		conn->Delete(String::New("svrCtx"));
+	if (conn->HasOwnProperty(NanNew<String>("svrCtx"))){
+		conn->Delete(NanNew<String>("svrCtx"));
 	}
 	if(pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
 		sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
@@ -323,17 +323,23 @@ void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups){
 void WrapUpAsyncAfterAuth(Baton* pBaton){
 	// call the callback
 	if (pBaton->err) {
-		pBaton->res->Set(String::New("statusCode"), Integer::New(pBaton->err->http_code));
-		Handle<Value> argv[] = { String::New(pBaton->err->what())};
-
-		if(pBaton->opts->Get(String::New("authoritative"))->BooleanValue()){
-			pBaton->res->Get(String::New("end"))->ToObject()->CallAsFunction(pBaton->res, 1, argv);
+		Local<Object> lRes = NanNew(pBaton->res);
+		lRes->Set(NanNew<String>("statusCode"), NanNew<Integer>(pBaton->err->http_code));
+		NanAssignPersistent(pBaton->res, lRes);
+		Handle<Value> argv[] = { NanNew<String>(pBaton->err->what())};
+		Local<Object> lOpts = NanNew(pBaton->opts);
+		if(lOpts->Get(NanNew<String>("authoritative"))->BooleanValue()){
+			lRes->Get(NanNew<String>("end"))->ToObject()->CallAsFunction(lRes, 1, argv);
 		}
-		if(!pBaton->callback.IsEmpty())  
-			pBaton->callback->Call(pBaton->callback,1,argv);
+		if(!pBaton->callback.IsEmpty()){
+			Local<Function> lCb = NanNew(pBaton->callback);
+			lCb->Call(lCb,1,argv);
+		}
 	} else {
-		if(!pBaton->callback.IsEmpty())  
-			pBaton->callback->Call(pBaton->callback,0,NULL);
+		if(!pBaton->callback.IsEmpty()){
+			Local<Function> lCb = NanNew(pBaton->callback);
+			lCb->Call(lCb,0,NULL);
+		}
 	}
 	delete pBaton;
 }
@@ -442,28 +448,28 @@ void AsyncBasicAuth(uv_work_t* req){
 }
 
 void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
-	HandleScope scope;
+	NanScope();
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 	try{
 		ULONG ss = pBaton->ss;
-		auto conn = pBaton->conn;
-		auto req = pBaton->req;
-		auto res = pBaton->res;
-		auto opts = pBaton->opts;
+		auto conn = NanNew(pBaton->conn);
+		auto req = NanNew(pBaton->req);
+		auto res = NanNew(pBaton->res);
+		auto opts = NanNew(pBaton->opts);
 		if(pBaton->err) throw pBaton->err;
 		auto pServerCtx = &pBaton->pSCR->server_context;
-		CleanupAuthenicationResources(conn , pServerCtx);
+		CleanupAuthenicationResources(NanNew(conn) , pServerCtx);
 		switch (ss) {
 		case SEC_E_OK:
 			{
 				if (!pBaton->user.empty()) {
-					conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
+					conn->Set(NanNew<String>("user"),NanNew<String>(pBaton->user.c_str()));
 					if(pBaton->pGroups){
-						auto groups = v8::Array::New(pBaton->pGroups->size());
+						auto groups = NanNew<v8::Array>(pBaton->pGroups->size());
 						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+							groups->Set(i, NanNew<String>(pBaton->pGroups->at(i).c_str()));
 						}
-						conn->Set(String::New("userGroups"),groups);
+						conn->Set(NanNew<String>("userGroups"),groups);
 					}
 				}
 				else{
@@ -476,7 +482,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 			{
-				res->Set(String::New("statusCode"), Integer::New(500));
+				res->Set(NanNew<String>("statusCode"), NanNew<Integer>(500));
 				break;
 			}
 		case SEC_E_INVALID_TOKEN:
@@ -484,16 +490,16 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		default:
 			{
 				note_sspi_auth_failure(opts,req,res);
-				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
-					conn->Set(String::New("remainingAttempts")
-						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+				if(!conn->HasOwnProperty(NanNew<String>("remainingAttempts"))){
+					conn->Set(NanNew<String>("remainingAttempts")
+						,NanNew<Integer>(opts->Get(NanNew<String>("maxLoginAttemptsPerConnection"))->Int32Value()-1));
 				}
-				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+				int remainingAttmpts = conn->Get(NanNew<String>("remainingAttempts"))->Int32Value(); 
 				if(remainingAttmpts<=0){
 					throw new NodeSSPIException("Max login attempts reached.",403);
 				}
-				conn->Set(String::New("remainingAttempts")
-					,Integer::New(remainingAttmpts-1));
+				conn->Set(NanNew<String>("remainingAttempts")
+					,NanNew<Integer>(remainingAttmpts-1));
 				break;
 			}
 		}
@@ -510,35 +516,35 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 	,Local<Object> res, Local<Object> conn, BYTE *pInToken
 	, ULONG sz, Local<Function> cb){
 		std::string sspiPkg(sspiModuleInfo.defaultPackage);
-		if(opts->Has(String::New("sspiPackagesUsed"))){
-			auto firstSSPIPackage = opts->Get(String::New("sspiPackagesUsed"))->ToObject()->Get(0);
+		if(opts->Has(NanNew<String>("sspiPackagesUsed"))){
+			auto firstSSPIPackage = opts->Get(NanNew<String>("sspiPackagesUsed"))->ToObject()->Get(0);
 			sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
 		}
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
-		pBaton->callback = Persistent<Function>::New(cb);
-		pBaton->req = Persistent<Object>::New(req);
-		pBaton->conn = Persistent<Object>::New(conn);
-		pBaton->res = Persistent<Object>::New(res);
-		pBaton->opts = Persistent<Object>::New(opts);
+		NanAssignPersistent(pBaton->callback, cb);
+		NanAssignPersistent(pBaton->req, req);
+		NanAssignPersistent(pBaton->conn, conn);
+		NanAssignPersistent(pBaton->res, res);
+		NanAssignPersistent(pBaton->opts, opts);
 		pBaton->sspiPkg = sspiPkg;
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
-		pBaton->retrieveGroups = opts->Get(String::New("retrieveGroups"))->BooleanValue();
-		if(req->HasOwnProperty(String::New("isTestingNodeSSPI")) 
-			&& req->Get(String::New("isTestingNodeSSPI"))->BooleanValue()){
+		pBaton->retrieveGroups = opts->Get(NanNew<String>("retrieveGroups"))->BooleanValue();
+		if(req->HasOwnProperty(NanNew<String>("isTestingNodeSSPI")) 
+			&& req->Get(NanNew<String>("isTestingNodeSSPI"))->BooleanValue()){
 				pBaton->isTesting = true;
 		}
-		if(opts->Has(String::New("domain"))){
-			pBaton->basicDomain = new std::string(*String::AsciiValue(opts->Get(String::New("domain"))));
+		if(opts->Has(NanNew<String>("domain"))){
+			pBaton->basicDomain = new std::string(*String::Utf8Value(opts->Get(NanNew<String>("domain"))));
 		}
 		uv_queue_work(uv_default_loop(), &pBaton->request,
 			AsyncBasicAuth, AsyncAfterBasicAuth);
 }
 
-void weakSvrCtxCallback(Persistent<Value> object, void *parameter)
+void weakSvrCtxCallback(const v8::WeakCallbackData<v8::Value, sspi_connection_rec>& data)
 {
-	sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *> (parameter);
+	sspi_connection_rec *pSCR = data.GetParameter();
 	if(!pSCR) return;
 	PCtxtHandle outPch =  &pSCR->server_context;
 	if(outPch && outPch->dwLower >0 && outPch->dwUpper >0){
@@ -596,15 +602,15 @@ void AsyncSSPIAuth(uv_work_t* req){
 }
 
 void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
-	HandleScope scope;
+	NanScope();
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 	BYTE *  pOutBuf = pBaton->pInToken;
-	auto opts = pBaton->opts;
-	auto res = pBaton->res;
+	auto opts = NanNew(pBaton->opts);
+	auto res = NanNew(pBaton->res);
 	try{
 		ULONG ss = pBaton->ss;
-		auto conn = pBaton->conn;
-		auto req = pBaton->req;
+		auto conn = NanNew(pBaton->conn);
+		auto req = NanNew(pBaton->req);
 		if(pBaton->err) throw pBaton->err;
 		ULONG tokSz = pBaton->pInTokenSz;
 		switch (ss) {
@@ -620,9 +626,9 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 					&base64Length, ATL_BASE64_FLAG_NOCRLF);
 				base64.ReleaseBufferSetLength(base64Length);
 				std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
-				Handle<Value> argv[] = { String::New("WWW-Authenticate"), String::New(authHStr.c_str()) };
-				res->Get(String::New("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
-				res->Set(String::New("statusCode"), Integer::New(401));
+				Handle<Value> argv[] = { NanNew<String>("WWW-Authenticate"), NanNew<String>(authHStr.c_str()) };
+				res->Get(NanNew<String>("setHeader"))->ToObject()->CallAsFunction(res, 2, argv);
+				res->Set(NanNew<String>("statusCode"), NanNew<Integer>(401));
 				break;
 			}
 		case SEC_E_INVALID_TOKEN:
@@ -630,16 +636,16 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 			{
 				note_sspi_auth_failure(opts,req,res);
 				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-				if(!conn->HasOwnProperty(String::New("remainingAttempts"))){
-					conn->Set(String::New("remainingAttempts")
-						,Integer::New(opts->Get(String::New("maxLoginAttemptsPerConnection"))->Int32Value()-1));
+				if(!conn->HasOwnProperty(NanNew<String>("remainingAttempts"))){
+					conn->Set(NanNew<String>("remainingAttempts")
+						,NanNew<Integer>(opts->Get(NanNew<String>("maxLoginAttemptsPerConnection"))->Int32Value()-1));
 				}
-				int remainingAttmpts = conn->Get(String::New("remainingAttempts"))->Int32Value(); 
+				int remainingAttmpts = conn->Get(NanNew<String>("remainingAttempts"))->Int32Value(); 
 				if(remainingAttmpts<=0){
 					throw new NodeSSPIException("Max login attempts reached.",403);
 				}
-				conn->Set(String::New("remainingAttempts")
-					,Integer::New(remainingAttmpts-1));
+				conn->Set(NanNew<String>("remainingAttempts")
+					,NanNew<Integer>(remainingAttmpts-1));
 				break;
 			}
 		case SEC_E_INVALID_HANDLE:
@@ -648,20 +654,20 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_INSUFFICIENT_MEMORY:
 			{
 				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-				res->Set(String::New("statusCode"), Integer::New(500));
+				res->Set(NanNew<String>("statusCode"), NanNew<Integer>(500));
 				break;
 			}
 		case SEC_E_OK:
 			{
 				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
 				if (!pBaton->user.empty()) {
-					conn->Set(String::New("user"),String::New(pBaton->user.c_str()));
+					conn->Set(NanNew<String>("user"),NanNew<String>(pBaton->user.c_str()));
 					if(pBaton->pGroups){
-						auto groups = v8::Array::New(pBaton->pGroups->size());
+						auto groups = NanNew<v8::Array>(pBaton->pGroups->size());
 						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-							groups->Set(i, String::New(pBaton->pGroups->at(i).c_str()));
+							groups->Set(i, NanNew<String>(pBaton->pGroups->at(i).c_str()));
 						}
-						conn->Set(String::New("userGroups"),groups);
+						conn->Set(NanNew<String>("userGroups"),groups);
 					}
 
 				}
@@ -683,9 +689,9 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 	, ULONG sz, Local<Function> cb){
 		// acquire server context from request.connection
 		sspi_connection_rec *pSCR = 0;
-		if (conn->HasOwnProperty(String::New("svrCtx"))){
+		if (conn->HasOwnProperty(NanNew<String>("svrCtx"))){
 			// this is not initial request
-			Local<External> wrap = Local<External>::Cast(conn->Get(String::New("svrCtx"))->ToObject()->GetInternalField(0));
+			Local<External> wrap = Local<External>::Cast(conn->Get(NanNew<String>("svrCtx"))->ToObject()->GetInternalField(0));
 			pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
 		}
 		else{
@@ -693,26 +699,28 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
 			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
 			svrCtx_templ->SetInternalFieldCount(1);
-			Persistent<Object> obj = Persistent<Object>::New(svrCtx_templ->NewInstance());
-			obj->SetInternalField(0, External::New(pSCR));
+			Persistent<Object> obj;
+			Local<Object> lObj = svrCtx_templ->NewInstance();
+			lObj->SetInternalField(0, NanNew<External>(pSCR));
+			NanAssignPersistent(obj, lObj);
 			// hook to GC to clean up in-progress authentications
 			// necessary to defend against attacks similar to sync flood 
-			obj.MakeWeak(pSCR,weakSvrCtxCallback);
-			conn->Set(String::New("svrCtx"), obj);
+			obj.SetWeak(pSCR,weakSvrCtxCallback);
+			conn->Set(NanNew<String>("svrCtx"), obj);
 		}
 
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
-		pBaton->callback = Persistent<Function>::New(cb);
-		pBaton->req = Persistent<Object>::New(req);
-		pBaton->conn = Persistent<Object>::New(conn);
-		pBaton->res = Persistent<Object>::New(res);
-		pBaton->opts = Persistent<Object>::New(opts);
+		NanAssignPersistent(pBaton->callback, cb);
+		NanAssignPersistent(pBaton->req, req);
+		NanAssignPersistent(pBaton->conn, conn);
+		NanAssignPersistent(pBaton->res, res);
+		NanAssignPersistent(pBaton->opts, opts);
 		pBaton->sspiPkg = schema;
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
 		pBaton->pSCR = pSCR;
-		pBaton->retrieveGroups = opts->Get(String::New("retrieveGroups"))->BooleanValue();
+		pBaton->retrieveGroups = opts->Get(NanNew<String>("retrieveGroups"))->BooleanValue();
 		uv_queue_work(uv_default_loop(), &pBaton->request,
 			AsyncSSPIAuth, AsyncAfterSSPIAuth);
 }
@@ -723,7 +731,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 * args[2]: res
 */
 Handle<Value> Authenticate(const Arguments& args) {
-	HandleScope scope;
+	NanScope();
 	auto opts = args[0]->ToObject();
 	auto res = args[2]->ToObject();
 	Local<Object> conn;
@@ -733,8 +741,8 @@ Handle<Value> Authenticate(const Arguments& args) {
 	}
 	try{
 		auto req = args[1]->ToObject();
-		conn = req->Get(String::New("connection"))->ToObject();
-		if(conn->HasOwnProperty(String::New("user"))){
+		conn = req->Get(NanNew<String>("connection"))->ToObject();
+		if(conn->HasOwnProperty(NanNew<String>("user"))){
 			if(!cb.IsEmpty()) {
 				cb->Call(cb,0,NULL);
 			}
@@ -743,20 +751,20 @@ Handle<Value> Authenticate(const Arguments& args) {
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
 		}
-		auto headers = req->Get(String::New("headers"))->ToObject(); 
-		if(!headers->Has(String::New("authorization"))){
+		auto headers = req->Get(NanNew<String>("headers"))->ToObject(); 
+		if(!headers->Has(NanNew<String>("authorization"))){
 			note_sspi_auth_failure(opts,req,res);
-			if(opts->Get(String::New("authoritative"))->BooleanValue()
-				&& !req->Get(String::New("connection"))->ToObject()->Has(String::New("user"))
+			if(opts->Get(NanNew<String>("authoritative"))->BooleanValue()
+				&& !req->Get(NanNew<String>("connection"))->ToObject()->Has(NanNew<String>("user"))
 				){
-					res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 0, NULL);
+					res->Get(NanNew<String>("end"))->ToObject()->CallAsFunction(res, 0, NULL);
 			}
 			if(!cb.IsEmpty())  {
 				cb->Call(cb,0, NULL);
 			}
 			return scope.Close(Undefined());
 		}
-		auto aut = std::string(*String::AsciiValue(headers->Get(String::New("authorization"))));
+		auto aut = std::string(*String::AsciiValue(headers->Get(NanNew<String>("authorization"))));
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
@@ -776,10 +784,10 @@ Handle<Value> Authenticate(const Arguments& args) {
 	}
 	catch (NodeSSPIException &ex){
 		CleanupAuthenicationResources(conn);
-		args[2]->ToObject()->Set(String::New("statusCode"), Integer::New(ex.http_code));
-		Handle<Value> argv[] = {String::New(ex.what())};
-		if(opts->Get(String::New("authoritative"))->BooleanValue()){
-			res->Get(String::New("end"))->ToObject()->CallAsFunction(res, 1, argv);
+		args[2]->ToObject()->Set(NanNew<String>("statusCode"), NanNew<Integer>(ex.http_code));
+		Handle<Value> argv[] = {NanNew<String>(ex.what())};
+		if(opts->Get(NanNew<String>("authoritative"))->BooleanValue()){
+			res->Get(NanNew<String>("end"))->ToObject()->CallAsFunction(res, 1, argv);
 		}
 		if(!cb.IsEmpty())  cb->Call(cb,1,argv);
 	}

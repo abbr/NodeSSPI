@@ -9,16 +9,24 @@
     "install": "node ./build.js"
   },
   "dependencies": {
-    "bindings": "~1.1.1"
+    "bindings": "~1.1.1",
+    "nan": "^1.6.2"
   },
   "engines": {
     "node": "~0.10.0"
   },
-  "os": ["win32"],
+  "os": [
+    "win32"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/abbr/nodesspi.git"
   },
   "homepage": "https://github.com/abbr/nodesspi",
-  "keywords": ["sspi", "authentication", "ntlm", "kerberos"]
+  "keywords": [
+    "sspi",
+    "authentication",
+    "ntlm",
+    "kerberos"
+  ]
 }

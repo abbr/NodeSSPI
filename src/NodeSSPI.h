@@ -2,6 +2,7 @@
 
 #define SECURITY_WIN32 1
 #include <node.h>
+#include <nan.h>
 #include <v8.h>
 
 /* System headers */

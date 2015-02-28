@@ -5,6 +5,9 @@
       "sources": [
         "src/*.h",
         "src/*.cpp",
+      ],
+      "include_dirs" : [
+        "<!(node -e \"require('nan')\")"
       ]
     }
   ]
