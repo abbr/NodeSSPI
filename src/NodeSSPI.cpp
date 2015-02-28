@@ -542,7 +542,7 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 			AsyncBasicAuth, AsyncAfterBasicAuth);
 }
 
-void weakSvrCtxCallback(const v8::WeakCallbackData<v8::Value, sspi_connection_rec>& data)
+void weakSvrCtxCallback(const v8::WeakCallbackData<v8::Object, sspi_connection_rec>& data)
 {
 	sspi_connection_rec *pSCR = data.GetParameter();
 	if(!pSCR) return;
@@ -706,7 +706,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			// hook to GC to clean up in-progress authentications
 			// necessary to defend against attacks similar to sync flood 
 			obj.SetWeak(pSCR,weakSvrCtxCallback);
-			conn->Set(NanNew<String>("svrCtx"), obj);
+			conn->Set(NanNew<String>("svrCtx"), lObj);
 		}
 
 		Baton *pBaton = new Baton();
