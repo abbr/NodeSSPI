@@ -128,13 +128,26 @@ void note_sspi_auth_failure(const Handle<Object> opts,const Handle<Object> req,H
 void CleanupAuthenicationResources(Handle<Object> conn
 	, PCtxtHandle pSvrCtxHdl = NULL)
 {
-	if (conn->HasOwnProperty(NanNew<String>("svrCtx"))){
-		conn->Delete(NanNew<String>("svrCtx"));
+	try{
+		if(pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
+			sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
+			pSvrCtxHdl->dwUpper = pSvrCtxHdl->dwLower = 0;
+		}
+		if (conn->HasOwnProperty(NanNew<String>("svrCtx"))){
+			Local<External> wrap = Local<External>::Cast(conn->Get(NanNew<String>("svrCtx"))->ToObject()->GetInternalField(0));
+			sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
+			if(pSCR){
+				PCtxtHandle outPch =  &pSCR->server_context;
+				if(outPch && outPch->dwLower >0 && outPch->dwUpper >0){
+					sspiModuleInfo.functable->DeleteSecurityContext(outPch);
+					outPch->dwLower = outPch->dwUpper = 0;
+				}
+				delete pSCR;
+			}
+			conn->Delete(NanNew<String>("svrCtx"));
+		}
 	}
-	if(pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
-		sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
-		pSvrCtxHdl->dwUpper = pSvrCtxHdl->dwLower = 0;
-	}
+	catch(...){}
 }
 
 /*
@@ -542,16 +555,10 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 			AsyncBasicAuth, AsyncAfterBasicAuth);
 }
 
-void weakSvrCtxCallback(const v8::WeakCallbackData<v8::Object, sspi_connection_rec>& data)
+void onConnectionClose(const FunctionCallbackInfo<Value>& args)
 {
-	sspi_connection_rec *pSCR = data.GetParameter();
-	if(!pSCR) return;
-	PCtxtHandle outPch =  &pSCR->server_context;
-	if(outPch && outPch->dwLower >0 && outPch->dwUpper >0){
-		sspiModuleInfo.functable->DeleteSecurityContext(outPch);
-		outPch->dwLower = outPch->dwUpper = 0;
-	}
-	delete pSCR;
+	Local<v8::Object> conn = args.This();
+	CleanupAuthenicationResources(conn);
 }
 
 void AsyncSSPIAuth(uv_work_t* req){
@@ -697,18 +704,20 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 		else{
 			pSCR = new sspi_connection_rec();
 			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
-			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New();
+	 		Isolate* isolate = Isolate::GetCurrent();
+			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New(isolate);
 			svrCtx_templ->SetInternalFieldCount(1);
-			Persistent<Object> obj;
 			Local<Object> lObj = svrCtx_templ->NewInstance();
 			lObj->SetInternalField(0, NanNew<External>(pSCR));
-			NanAssignPersistent(obj, lObj);
-			// hook to GC to clean up in-progress authentications
-			// necessary to defend against attacks similar to sync flood 
-			obj.SetWeak(pSCR,weakSvrCtxCallback);
+			// use conn socket to hold pSCR
 			conn->Set(NanNew<String>("svrCtx"), lObj);
+			// hook to socket close event to clean up abandoned in-progress authentications
+			// necessary to defend against attacks similar to sync flood 
+ 		    Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, onConnectionClose);
+			Local<Function> fn = tpl->GetFunction();
+			Handle<Value> argv[] = { NanNew<String>("close"), fn };
+			conn->Get(NanNew<String>("on"))->ToObject()->CallAsFunction(conn, 2, argv);
 		}
-
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
 		NanAssignPersistent(pBaton->callback, cb);
