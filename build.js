@@ -8,7 +8,7 @@ var force = false,
 var
   arch = process.arch,
   platform = process.platform,
-  v8 = /[0-9]+/.exec(process.versions.v8)[0];
+  nodeV = /[0-9]+\.[0-9]+/.exec(process.versions.node)[0];
 var args = process.argv.slice(2).filter(function (arg) {
   if (arg === '-f') {
     force = true;
@@ -30,7 +30,7 @@ if (!{
 }
 
 // Test for pre-built library
-var modPath = platform+ '-'+ arch+ '-v8-'+ v8;
+var modPath = platform+ '-'+ arch+ '-node-'+ nodeV;
 if (!force) {
   try {
     fs.statSync(path.join(__dirname, 'bin', modPath, 'nodeSSPI.node'));
