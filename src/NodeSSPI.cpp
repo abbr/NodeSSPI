@@ -555,10 +555,11 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 			AsyncBasicAuth, AsyncAfterBasicAuth);
 }
 
-void onConnectionClose(const FunctionCallbackInfo<Value>& args)
-{
+NAN_METHOD(onConnectionClose) {
+	NanScope();
 	Local<v8::Object> conn = args.This();
 	CleanupAuthenicationResources(conn);
+	NanReturnUndefined();
 }
 
 void AsyncSSPIAuth(uv_work_t* req){
@@ -705,7 +706,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			pSCR = new sspi_connection_rec();
 			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
 	 		Isolate* isolate = Isolate::GetCurrent();
-			Handle<ObjectTemplate> svrCtx_templ = ObjectTemplate::New(isolate);
+			Handle<ObjectTemplate> svrCtx_templ = NanNew<ObjectTemplate>();
 			svrCtx_templ->SetInternalFieldCount(1);
 			Local<Object> lObj = svrCtx_templ->NewInstance();
 			lObj->SetInternalField(0, NanNew<External>(pSCR));
@@ -713,9 +714,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 			conn->Set(NanNew<String>("svrCtx"), lObj);
 			// hook to socket close event to clean up abandoned in-progress authentications
 			// necessary to defend against attacks similar to sync flood 
- 		    Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, onConnectionClose);
-			Local<Function> fn = tpl->GetFunction();
-			Handle<Value> argv[] = { NanNew<String>("close"), fn };
+			Handle<Value> argv[] = { NanNew<String>("close"), NanNew<FunctionTemplate>(onConnectionClose)->GetFunction() };
 			conn->Get(NanNew<String>("on"))->ToObject()->CallAsFunction(conn, 2, argv);
 		}
 		Baton *pBaton = new Baton();
