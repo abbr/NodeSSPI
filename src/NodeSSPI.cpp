@@ -379,11 +379,11 @@ void AsyncBasicAuth(uv_work_t* req){
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
 		authIden.Domain = (unsigned char *)domain.c_str();
-		authIden.DomainLength = domain.length();
+		authIden.DomainLength = static_cast<unsigned long>(domain.length());
 		authIden.User = (unsigned char *) nm.c_str();
-		authIden.UserLength = nm.length();
+		authIden.UserLength = static_cast<unsigned long>(nm.length());
 		authIden.Password = (unsigned char *) pswd.c_str();
-		authIden.PasswordLength = pswd.length();
+		authIden.PasswordLength = static_cast<unsigned long>(pswd.length());
 #ifdef UNICODE
 		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
 #else
@@ -778,7 +778,7 @@ NAN_METHOD(Authenticate) {
 		ssin >> schema;
 		ssin >> strToken;
 		// base64 decode strToken
-		int sz = strToken.length();
+		int sz = static_cast<int>(strToken.length());
 		BYTE * pToken = static_cast<BYTE*>(calloc(sz,1));
 		if (!Base64Decode(strToken.c_str(), sz, pToken, &sz)){
 			throw NodeSSPIException("Cannot decode authorization field.");
