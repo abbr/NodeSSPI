@@ -334,13 +334,12 @@ void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups){
 }
 
 void WrapUpAsyncAfterAuth(Baton* pBaton){
-	// call the callback
+	Local<Object> lRes = NanNew(pBaton->res);
+	Local<Object> lOpts = NanNew(pBaton->opts);
 	if (pBaton->err) {
-		Local<Object> lRes = NanNew(pBaton->res);
 		lRes->Set(NanNew<String>("statusCode"), NanNew<Integer>(pBaton->err->http_code));
 		NanAssignPersistent(pBaton->res, lRes);
 		Handle<Value> argv[] = { NanNew<String>(pBaton->err->what())};
-		Local<Object> lOpts = NanNew(pBaton->opts);
 		if(lOpts->Get(NanNew<String>("authoritative"))->BooleanValue()){
 			lRes->Get(NanNew<String>("end"))->ToObject()->CallAsFunction(lRes, 1, argv);
 		}
@@ -349,6 +348,12 @@ void WrapUpAsyncAfterAuth(Baton* pBaton){
 			lCb->Call(lCb,1,argv);
 		}
 	} else {
+		if(lRes->Get(NanNew<String>("statusCode"))->Int32Value() == 401){
+			Handle<Value> argv[] = { NanNew<String>("Login aborted.")};
+			if(lOpts->Get(NanNew<String>("authoritative"))->BooleanValue()){
+				lRes->Get(NanNew<String>("end"))->ToObject()->CallAsFunction(lRes, 1, argv);
+			}
+		}
 		if(!pBaton->callback.IsEmpty()){
 			Local<Function> lCb = NanNew(pBaton->callback);
 			lCb->Call(lCb,0,NULL);
@@ -368,6 +373,10 @@ void AsyncBasicAuth(uv_work_t* req){
 		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
 		if(pBaton->basicDomain) domain = *pBaton->basicDomain;
 		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
+		if(domainNnm.length() == 0){
+			pBaton->ss = SEC_E_LOGON_DENIED;
+			return;
+		}
 		if(domainNnm.find("\\") != std::string::npos){
 			domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
 			nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
