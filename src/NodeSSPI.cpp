@@ -161,6 +161,114 @@ ULONG getMaxTokenSz(std::string pkgNm){
 	}
 	throw new NodeSSPIException(("No " + pkgNm + " SSPI package.").c_str());
 }
+
+/*
+* Get sid from acct name
+*/
+void GetSid(
+	LPCSTR wszAccName,
+	PSID * ppSid
+	) 
+{
+	// Validate the input parameters.
+	if (wszAccName == NULL || ppSid == NULL)
+	{
+		throw new NodeSSPIException("Cannot obtain user account.");
+	}
+	// Create buffers that may be large enough.
+	// If a buffer is too small, the count parameter will be set to the size needed.
+	const DWORD INITIAL_SIZE = 32;
+	DWORD cbSid = 0;
+	DWORD dwSidBufferSize = INITIAL_SIZE;
+	DWORD cchDomainName = 0;
+	DWORD dwDomainBufferSize = INITIAL_SIZE;
+	CHAR * wszDomainName = NULL;
+	SID_NAME_USE eSidType;
+
+	try{
+		// Create buffers for the SID and the domain name.
+		*ppSid = (PSID) new BYTE[dwSidBufferSize];
+		if (*ppSid == NULL)
+		{
+			throw new NodeSSPIException("Cannot obtain user account.");
+		}
+		memset(*ppSid, 0, dwSidBufferSize);
+		wszDomainName = new CHAR[dwDomainBufferSize];
+		if (wszDomainName == NULL)
+		{
+			throw new NodeSSPIException("Cannot obtain user account.");
+		}
+		memset(wszDomainName, 0, dwDomainBufferSize*sizeof(CHAR));
+
+
+		// Obtain the SID for the account name passed.
+		for ( ; ; )
+		{
+
+			// Set the count variables to the buffer sizes and retrieve the SID.
+			cbSid = dwSidBufferSize;
+			cchDomainName = dwDomainBufferSize;
+			if (LookupAccountName(
+				NULL,            // Computer name. NULL for the local computer
+				wszAccName,
+				*ppSid,          // Pointer to the SID buffer. Use NULL to get the size needed,
+				&cbSid,          // Size of the SID buffer needed.
+				wszDomainName,   // wszDomainName,
+				&cchDomainName,
+				&eSidType
+				))
+			{
+				if (IsValidSid(*ppSid) == FALSE)
+				{
+					throw new NodeSSPIException("Cannot obtain user account.");
+				}
+				break;
+			}
+
+			// Check if one of the buffers was too small.
+			if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+			{
+				if (cbSid > dwSidBufferSize)
+				{
+
+					// Reallocate memory for the SID buffer.
+					FreeSid(*ppSid);
+					*ppSid = (PSID) new BYTE[cbSid];
+					if (*ppSid == NULL)
+					{
+						throw new NodeSSPIException("Cannot obtain user account.");
+					}
+					memset(*ppSid, 0, cbSid);
+					dwSidBufferSize = cbSid;
+				}
+				if (cchDomainName > dwDomainBufferSize)
+				{
+					// Reallocate memory for the domain name buffer.
+					delete [] wszDomainName;
+					wszDomainName = new CHAR[cchDomainName];
+					if (wszDomainName == NULL)
+					{
+						throw new NodeSSPIException("Cannot obtain user account.");
+					}
+					memset(wszDomainName, 0, cchDomainName*sizeof(CHAR));
+					dwDomainBufferSize = cchDomainName;
+				}
+			}
+			else
+			{
+				throw new NodeSSPIException("Cannot obtain user account.");
+				break;
+			}
+		}
+	}
+	catch(...){
+		if(*ppSid) delete[] *ppSid;
+		if(wszDomainName) delete [] wszDomainName;
+		throw;
+	}
+	delete [] wszDomainName;
+}
+
 /*
 * Acquire sharable server credentials by schema honoring expiry timestamp
 */
@@ -601,12 +709,20 @@ void AsyncSSPIAuth(uv_work_t* req){
 				SECPKG_ATTR_NAMES, 
 				&names)
 				) == SEC_E_OK) {
-					pBaton->user = names.sUserName;
-					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
-					if(pBaton->retrieveGroups){
-						pBaton->pGroups = new vector<std::string>();
-						RetrieveUserGroups(outPch,pBaton->pGroups);
+					PSID pSid = NULL;
+					GetSid(names.sUserName, &pSid);
+					if(IsWellKnownSid(pSid, WinAnonymousSid)){
+						pBaton->ss = SEC_E_INVALID_TOKEN;
 					}
+					else{
+						pBaton->user = names.sUserName;
+						if(pBaton->retrieveGroups){
+							pBaton->pGroups = new vector<std::string>();
+							RetrieveUserGroups(outPch,pBaton->pGroups);
+						}
+					}
+					delete[] pSid;
+					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 			}
 			else{
 				throw new NodeSSPIException("Cannot obtain user name.");
@@ -714,7 +830,7 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 		else{
 			pSCR = new sspi_connection_rec();
 			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
-	 		Isolate* isolate = Isolate::GetCurrent();
+			Isolate* isolate = Isolate::GetCurrent();
 			Handle<ObjectTemplate> svrCtx_templ = NanNew<ObjectTemplate>();
 			svrCtx_templ->SetInternalFieldCount(1);
 			Local<Object> lObj = svrCtx_templ->NewInstance();
@@ -769,6 +885,14 @@ NAN_METHOD(Authenticate) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
 		}
 		auto headers = req->Get(NanNew<String>("headers"))->ToObject(); 
+
+		if(conn->HasOwnProperty(NanNew<String>("remainingAttempts"))){
+			int remainingAttmpts = conn->Get(NanNew<String>("remainingAttempts"))->Int32Value(); 
+			if(remainingAttmpts<0){
+				throw NodeSSPIException("Max login attempts reached.",403);
+			}
+		}
+
 		if(!headers->Has(NanNew<String>("authorization"))){
 			note_sspi_auth_failure(opts,req,res);
 			if(opts->Get(NanNew<String>("authoritative"))->BooleanValue()
