@@ -21,8 +21,10 @@
 *.app
 
 build/
-bin/
+bin
 src/Debug/
 
 node_modules/
 .c9/
+
+.project
