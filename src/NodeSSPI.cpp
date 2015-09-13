@@ -390,7 +390,7 @@ void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
 	TOKEN_GROUPS *groupinfo = NULL;
 	DWORD groupinfosize = 0;
 	SID_NAME_USE sidtype;
-	char group_name[_MAX_PATH], domain_name[_MAX_PATH];
+	wchar_t group_name[_MAX_PATH], domain_name[_MAX_PATH];
 	DWORD grouplen, domainlen;
 	unsigned int i;
 
@@ -406,11 +406,11 @@ void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
 	for (i = 0; i < groupinfo->GroupCount; i++) {
 		grouplen = _MAX_PATH;
 		domainlen = _MAX_PATH;
-		if (LookupAccountSid(NULL, groupinfo->Groups[i].Sid, 
+		if (LookupAccountSidW(NULL, groupinfo->Groups[i].Sid, 
 			group_name, &grouplen,
 			domain_name, &domainlen,
 			&sidtype)) {
-				std::string grpNm = std::string(domain_name)+std::string("\\")+std::string(group_name);
+				std::string grpNm = std::string(CW2A(domain_name, CP_UTF8))+std::string("\\")+std::string(CW2A(group_name, CP_UTF8));
 				pGroups->push_back(grpNm);
 		}
 	}
