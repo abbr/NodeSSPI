@@ -42,10 +42,10 @@ public:
 	//std::string error_message;
 
 	// Custom data
-	Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>> req;
-	Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>> res;
-	Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>> conn;
-	Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>> opts;
+	Nan::Persistent<v8::Object> req;
+	Nan::Persistent<v8::Object> res;
+	Nan::Persistent<v8::Object> conn;
+	Nan::Persistent<v8::Object> opts;
 	std::string sspiPkg;
 	ULONG ss;
 	std::string user;
@@ -447,7 +447,7 @@ void WrapUpAsyncAfterAuth(Baton* pBaton){
 	Local<Object> lOpts = Nan::New(pBaton->opts);
 	if (pBaton->err) {
 		lRes->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(pBaton->err->http_code));
-		pBaton->res = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(lRes);
+		pBaton->res.Reset(lRes);
 		Handle<Value> argv[] = { Nan::New<String>(pBaton->err->what()).ToLocalChecked() };
 		if(lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()){
 			lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(lRes, 1, argv);
@@ -653,11 +653,11 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 		}
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
-		pBaton->callback = Nan::Persistent<v8::Function>(cb);
-		pBaton->req = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(req);
-		pBaton->conn = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(conn);
-		pBaton->res = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(res);
-		pBaton->opts = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(opts);
+		pBaton->callback.Reset(cb);
+		pBaton->req.Reset(req);
+		pBaton->conn.Reset(conn);
+		pBaton->res.Reset(res);
+		pBaton->opts.Reset(opts);
 		pBaton->sspiPkg = sspiPkg;
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;
@@ -844,11 +844,11 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 		}
 		Baton *pBaton = new Baton();
 		pBaton->request.data = pBaton;
-		pBaton->callback = Nan::Persistent<v8::Function>(cb);
-		pBaton->req = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(req);
-		pBaton->conn = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(conn);
-		pBaton->res = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(res);
-		pBaton->opts = Nan::Persistent<v8::Object, Nan::CopyablePersistentTraits<v8::Object>>(opts);
+		pBaton->callback.Reset(cb);
+		pBaton->req.Reset(req);
+		pBaton->conn.Reset(conn);
+		pBaton->res.Reset(res);
+		pBaton->opts.Reset(opts);
 		pBaton->sspiPkg = schema;
 		pBaton->pInToken = pInToken;
 		pBaton->pInTokenSz = sz;

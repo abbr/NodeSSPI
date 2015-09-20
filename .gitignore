@@ -28,3 +28,4 @@ node_modules/
 .c9/
 
 .project
+npm-debug.log

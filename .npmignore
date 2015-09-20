@@ -1,4 +1,5 @@
-build
+build/
 .c9/
 node_modules/
 .project
+npm-debug.log
