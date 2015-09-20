@@ -579,7 +579,7 @@ void AsyncBasicAuth(uv_work_t* req){
 }
 
 void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
-	Nan::HandleScope();
+	Nan::HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 	try{
 		ULONG ss = pBaton->ss;
@@ -674,7 +674,6 @@ void basic_authentication(const Local<Object> opts,const Local<Object> req
 }
 
 NAN_METHOD(onConnectionClose) {
-	Nan::HandleScope();
 	Local<v8::Object> conn = info.This();
 	CleanupAuthenicationResources(conn);
 }
@@ -735,7 +734,7 @@ void AsyncSSPIAuth(uv_work_t* req){
 }
 
 void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
-	Nan::HandleScope();
+	Nan::HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
 	BYTE *  pOutBuf = pBaton->pInToken;
 	auto opts = Nan::New(pBaton->opts);
@@ -864,7 +863,6 @@ void sspi_authentication(const Local<Object> opts,const Local<Object> req
 * args[2]: res
 */
 NAN_METHOD(Authenticate) {
-	Nan::HandleScope();
 	auto opts = info[0]->ToObject();
 	auto res = info[2]->ToObject();
 	Local<Object> conn;
