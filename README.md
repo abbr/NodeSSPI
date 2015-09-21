@@ -125,7 +125,7 @@ To install, run
 ```npm install node-sspi```
 
 ## Development
-Prerequisites: Visual Studio 2010
+Prerequisites: Visual Studio 2013
 
 Run:
 
@@ -136,9 +136,8 @@ npm install
 cd node_modules
 git clone git@github.com:abbr/NodeSSPI.git node-sspi
 cd node-sspi
-npm install
-cd ..\..
-node server.js
+npm install --debug
+node ..\..\server.js
 ```
 
-To debug, open NodeSSPI.sln in VS2010 and attach to node.js process. 
+To debug, open NodeSSPI.sln in VS2013 and attach to node.js process. 

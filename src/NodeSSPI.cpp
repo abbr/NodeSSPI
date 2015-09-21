@@ -498,12 +498,16 @@ void AsyncBasicAuth(uv_work_t* req){
 		pswd = inStr.substr(inStr.find_first_of(":")+1);
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
-		authIden.Domain = (unsigned short *) domain.c_str();
-		authIden.DomainLength = static_cast<unsigned long>(domain.length());
-		authIden.User = (unsigned short *)nm.c_str();
-		authIden.UserLength = static_cast<unsigned long>(nm.length());
-		authIden.Password = (unsigned short *) pswd.c_str();
-		authIden.PasswordLength = static_cast<unsigned long>(pswd.length());
+
+		CA2T domaint(domain.c_str(), CP_UTF8);
+		authIden.Domain = (unsigned short *) LPTSTR(domaint);
+		authIden.DomainLength = static_cast<unsigned long>(_tcslen(domaint));
+		CA2T nmt(nm.c_str(), CP_UTF8);
+		authIden.User = (unsigned short *) LPTSTR(nmt);
+		authIden.UserLength = static_cast<unsigned long>(_tcslen(nmt));
+		CA2T pswt(pswd.c_str(), CP_UTF8);
+		authIden.Password = (unsigned short *)LPTSTR(pswt);
+		authIden.PasswordLength = static_cast<unsigned long>(_tcslen(pswt));
 #ifdef UNICODE
 		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
 #else
@@ -516,7 +520,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		ULONG tokSz = getMaxTokenSz(sspiPkg);
 		CredHandle clientCred;
 		TimeStamp clientCredTs;
-		if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
+		if (sspiModuleInfo.functable->AcquireCredentialsHandle(
 			NULL,
 			(LPTSTR) CA2T(sspiPkg.c_str(), CP_UTF8),
 			SECPKG_CRED_OUTBOUND,
