@@ -77,17 +77,19 @@ void init_module()
 	SECURITY_STATUS ss = SEC_E_INTERNAL_ERROR;
 
 	sspiModuleInfo.defaultPackage = DEFAULT_SSPI_PACKAGE;
-	__try {
+	try {
 		sspiModuleInfo.securityDLL = LoadLibrary(lpDllName);
 		pInit = (INIT_SECURITY_INTERFACE)GetProcAddress(sspiModuleInfo.securityDLL, CW2A(SECURITY_ENTRYPOINT));
 		sspiModuleInfo.functable = pInit();
 		ss = sspiModuleInfo.functable->EnumerateSecurityPackages(&sspiModuleInfo.numPackages, &sspiModuleInfo.pkgInfo);
+		if (ss != SEC_E_OK) {
+			throw NodeSSPIException("Error loading SSPI module.");
+		}
 		sspiModuleInfo.supportsSSPI = TRUE;
 	}
-	__finally {
-		if (ss != SEC_E_OK) {
-			sspi_module_cleanup();
-		}
+	catch(...) {
+		sspi_module_cleanup();
+		throw;
 	}
 }
 
