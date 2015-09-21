@@ -20,7 +20,7 @@
 #include <sspi.h>
 //#include <security.h>
 
-#define WINNT_SECURITY_DLL "SECURITY.DLL"
+#define WINNT_SECURITY_DLL L"SECURITY.DLL"
 #define DEFAULT_SSPI_PACKAGE "NTLM"
 
 typedef struct {

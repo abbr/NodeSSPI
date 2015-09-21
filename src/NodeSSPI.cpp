@@ -72,14 +72,14 @@ void sspi_module_cleanup()
 
 void init_module()
 {
-	LPSTR lpDllName = WINNT_SECURITY_DLL;
+	LPCTSTR lpDllName = WINNT_SECURITY_DLL;
 	INIT_SECURITY_INTERFACE pInit;
 	SECURITY_STATUS ss = SEC_E_INTERNAL_ERROR;
 
 	sspiModuleInfo.defaultPackage = DEFAULT_SSPI_PACKAGE;
 	__try {
 		sspiModuleInfo.securityDLL = LoadLibrary(lpDllName);
-		pInit = (INIT_SECURITY_INTERFACE)GetProcAddress(sspiModuleInfo.securityDLL, SECURITY_ENTRYPOINT);
+		pInit = (INIT_SECURITY_INTERFACE)GetProcAddress(sspiModuleInfo.securityDLL, CW2A(SECURITY_ENTRYPOINT));
 		sspiModuleInfo.functable = pInit();
 		ss = sspiModuleInfo.functable->EnumerateSecurityPackages(&sspiModuleInfo.numPackages, &sspiModuleInfo.pkgInfo);
 		sspiModuleInfo.supportsSSPI = TRUE;
@@ -156,7 +156,7 @@ void CleanupAuthenicationResources(Handle<Object> conn
 */
 ULONG getMaxTokenSz(std::string pkgNm){
 	for (ULONG i = 0; i < sspiModuleInfo.numPackages; i++){
-		if (!pkgNm.compare(sspiModuleInfo.pkgInfo[i].Name)){
+		if (!pkgNm.compare(CT2A(sspiModuleInfo.pkgInfo[i].Name, CP_UTF8))){
 			return sspiModuleInfo.pkgInfo[i].cbMaxToken;
 		}
 	}
@@ -167,7 +167,7 @@ ULONG getMaxTokenSz(std::string pkgNm){
 * Get sid from acct name
 */
 void GetSid(
-	LPCSTR wszAccName,
+	LPCTSTR wszAccName,
 	PSID * ppSid
 	) 
 {
@@ -183,7 +183,7 @@ void GetSid(
 	DWORD dwSidBufferSize = INITIAL_SIZE;
 	DWORD cchDomainName = 0;
 	DWORD dwDomainBufferSize = INITIAL_SIZE;
-	CHAR * wszDomainName = NULL;
+	TCHAR * wszDomainName = NULL;
 	SID_NAME_USE eSidType;
 
 	try{
@@ -194,12 +194,12 @@ void GetSid(
 			throw new NodeSSPIException("Cannot obtain user account.");
 		}
 		memset(*ppSid, 0, dwSidBufferSize);
-		wszDomainName = new CHAR[dwDomainBufferSize];
+		wszDomainName = new TCHAR[dwDomainBufferSize];
 		if (wszDomainName == NULL)
 		{
 			throw new NodeSSPIException("Cannot obtain user account.");
 		}
-		memset(wszDomainName, 0, dwDomainBufferSize*sizeof(CHAR));
+		memset(wszDomainName, 0, dwDomainBufferSize*sizeof(TCHAR));
 
 
 		// Obtain the SID for the account name passed.
@@ -246,12 +246,12 @@ void GetSid(
 				{
 					// Reallocate memory for the domain name buffer.
 					delete [] wszDomainName;
-					wszDomainName = new CHAR[cchDomainName];
+					wszDomainName = new TCHAR[cchDomainName];
 					if (wszDomainName == NULL)
 					{
 						throw new NodeSSPIException("Cannot obtain user account.");
 					}
-					memset(wszDomainName, 0, cchDomainName*sizeof(CHAR));
+					memset(wszDomainName, 0, cchDomainName*sizeof(TCHAR));
 					dwDomainBufferSize = cchDomainName;
 				}
 			}
@@ -287,7 +287,7 @@ void acquireServerCredential(std::string schema){
 		// cred expired, re-generate
 		if (sspiModuleInfo.functable->AcquireCredentialsHandle(
 			NULL //pszPrincipal
-			, (char*)(schema.c_str()) //pszPackage
+			, (LPTSTR)(CA2T(schema.c_str(), CP_UTF8)) //pszPackage
 			, SECPKG_CRED_INBOUND //fCredentialUse
 			, NULL // pvLogonID
 			, NULL //pAuthData
@@ -303,7 +303,7 @@ void acquireServerCredential(std::string schema){
 }
 
 static ULONG gen_client_context(CredHandle *pCredentials
-	, const char * pkgNm	, BYTE *pInToken, ULONG *pInLen
+	, LPCTSTR pkgNm	, BYTE *pInToken, ULONG *pInLen
 	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
 		SecBuffer inbuf, outbuf;
 		SecBufferDesc inbufdesc, outbufdesc;
@@ -328,7 +328,7 @@ static ULONG gen_client_context(CredHandle *pCredentials
 		ULONG ss = sspiModuleInfo.functable->InitializeSecurityContext(
 			pCredentials //  _In_opt_     PCredHandle phCredential,
 			, havecontext ? outPch : NULL //  _In_opt_     PCtxtHandle phContext,
-			, (SEC_CHAR *) pkgNm //  _In_opt_     SEC_CHAR *pszTargetName,
+			, (LPTSTR) pkgNm //  _In_opt_     SEC_CHAR *pszTargetName,
 			, ISC_REQ_DELEGATE //  _In_         ULONG fContextReq,
 			, 0 //  _In_         ULONG Reserved1,
 			, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
@@ -496,11 +496,11 @@ void AsyncBasicAuth(uv_work_t* req){
 		pswd = inStr.substr(inStr.find_first_of(":")+1);
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
-		authIden.Domain = (unsigned char *)domain.c_str();
+		authIden.Domain = (unsigned short *) domain.c_str();
 		authIden.DomainLength = static_cast<unsigned long>(domain.length());
-		authIden.User = (unsigned char *) nm.c_str();
+		authIden.User = (unsigned short *)nm.c_str();
 		authIden.UserLength = static_cast<unsigned long>(nm.length());
-		authIden.Password = (unsigned char *) pswd.c_str();
+		authIden.Password = (unsigned short *) pswd.c_str();
 		authIden.PasswordLength = static_cast<unsigned long>(pswd.length());
 #ifdef UNICODE
 		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
@@ -516,7 +516,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		TimeStamp clientCredTs;
 		if(sspiModuleInfo.functable->AcquireCredentialsHandle(                                        
 			NULL,
-			(char*) sspiPkg.c_str(),
+			(LPTSTR) CA2T(sspiPkg.c_str(), CP_UTF8),
 			SECPKG_CRED_OUTBOUND,
 			NULL, ((pBaton->isTesting)?NULL:&authIden), NULL, NULL,
 			&clientCred,
@@ -535,7 +535,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		do {
 			cbIn = cbOut;
 			cbOut = tokSz;
-			ss = gen_client_context(&clientCred, sspiPkg.c_str()
+			ss = gen_client_context(&clientCred, CA2T(sspiPkg.c_str(), CP_UTF8)
 				, clientbuf, &cbIn, &client_context, pServerbuf.get(), &cbOut, &client_ctxtexpiry);
 
 			if (ss == SEC_E_OK || ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
@@ -561,7 +561,7 @@ void AsyncBasicAuth(uv_work_t* req){
 				SECPKG_ATTR_NAMES, 
 				&names)
 				) == SEC_E_OK) {
-					pBaton->user = names.sUserName;
+				pBaton->user = CT2A(names.sUserName, CP_UTF8);
 					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 					if(pBaton->retrieveGroups){
 						pBaton->pGroups = new vector<std::string>();
@@ -714,7 +714,7 @@ void AsyncSSPIAuth(uv_work_t* req){
 						pBaton->ss = SEC_E_INVALID_TOKEN;
 					}
 					else{
-						pBaton->user = names.sUserName;
+						pBaton->user = std::string(CT2A(names.sUserName, CP_UTF8));
 						if(pBaton->retrieveGroups){
 							pBaton->pGroups = new vector<std::string>();
 							RetrieveUserGroups(outPch,pBaton->pGroups);
