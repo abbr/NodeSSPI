@@ -116,7 +116,6 @@ Platforms older than Windows 2000 are unlikely to work. Other platforms may work
 
 ## Caveats
   * Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502\(v=vs.85\).aspx). So far only NTLM and Negotiate have been tested working. Kerberos is not working. Contribution is encouraged.
-  * No tests have been performed on servers with multi-byte unicode system locale.
 
 ## Installation
 Prerequisites: Except on a few [ platforms + Node version combinations](https://github.com/abbr/NodeSSPI-bin) where binary distribution is included, NodeSSPI uses node-gyp to compile C++ source code so you may need the compilers listed in [node-gyp](https://github.com/TooTallNate/node-gyp). You may also need to [update npm's bundled node gyp](https://github.com/TooTallNate/node-gyp/wiki/Updating-npm's-bundled-node-gyp).
