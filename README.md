@@ -54,7 +54,7 @@ server.listen(port, function () {
 If you put above code in a file, say *index.js*, and run following commands from the same directory:
 ```
 npm install node-sspi
-npm install express@3.4.3
+npm install express
 node index.js
 ```
 then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
