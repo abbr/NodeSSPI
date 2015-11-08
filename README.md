@@ -26,26 +26,24 @@ Following code illustrates how to add NodeSSPI to the request processing pipelin
 var express = require('express');
 var app = express();
 var server = require('http').createServer(app);
-app.configure(function () {
-  app.use(function (req, res, next) {
-    var nodeSSPI = require('node-sspi');
-    var nodeSSPIObj = new nodeSSPI({
-      retrieveGroups: true
-    });
-    nodeSSPIObj.authenticate(req, res, function(err){
-      res.finished || next();
-    });
+app.use(function (req, res, next) {
+  var nodeSSPI = require('node-sspi');
+  var nodeSSPIObj = new nodeSSPI({
+    retrieveGroups: true
   });
-  app.use(function (req, res, next) {
-    var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
-    if (req.connection.userGroups) {
-      for (var i in req.connection.userGroups) {
-        out += '<li>'+ req.connection.userGroups[i] + '</li><br/>\n';
-      }
+  nodeSSPIObj.authenticate(req, res, function(err){
+    res.finished || next();
+  });
+});
+app.use(function (req, res, next) {
+  var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
+  if (req.connection.userGroups) {
+    for (var i in req.connection.userGroups) {
+      out += '<li>'+ req.connection.userGroups[i] + '</li><br/>\n';
     }
-    out += '</ul>';
-    res.send(out);
-  });
+  }
+  out += '</ul>';
+  res.send(out);
 });
 // Start server
 var port = process.env.PORT || 3000;
@@ -56,7 +54,7 @@ server.listen(port, function () {
 If you put above code in a file, say *index.js*, and run following commands from the same directory:
 ```
 npm install node-sspi
-npm install express@3.4.3
+npm install express
 node index.js
 ```
 then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
