@@ -21,7 +21,7 @@
 *.app
 
 build/
-bin
+bin/
 src/Debug/
 
 node_modules/
@@ -29,3 +29,4 @@ node_modules/
 
 .project
 npm-debug.log
+/nbproject/private/

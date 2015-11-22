@@ -1,15 +1,23 @@
 var fs = require('fs'),
-  path = require('path');
+	path = require('path');
 var binding;
 
 // Look for binary for this platform
 var nodeV = 'node-' + /[0-9]+\.[0-9]+/.exec(process.versions.node)[0];
+var nodeVM = 'node-' + /[0-9]+/.exec(process.versions.node)[0];
 var modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch + '-' + nodeV, 'nodeSSPI');
 try {
-  fs.statSync(modPath + '.node');
-  binding = require(modPath);
-} catch (ex) {
-  binding = require('bindings')('nodeSSPI');
+	try{
+		fs.statSync(modPath + '.node');
+	}
+	catch(ex){
+		modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch + '-' + nodeVM, 'nodeSSPI');
+		fs.statSync(modPath + '.node');
+	}
+	binding = require(modPath);
+}
+catch (ex) {
+	binding = require('bindings')('nodeSSPI');
 }
 
 /*
