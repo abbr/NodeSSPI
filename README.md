@@ -85,7 +85,7 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
   * perRequestAuth: false|true 
       - default to *false*. Whether authentication should be performed at per request level or per connection level. Per connection level is preferred to reduce overhead.
   * retrieveGroups: false|true 
-      - default to *false* for performance sake. Whether to retrieve groups upon successful authentication. 
+      - default to *false* for performance sake. Whether to retrieve groups upon successful authentication. See [caveats](#caveats) below.
   * maxLoginAttemptsPerConnection: &lt;number&gt;
       - default to *3*. How many login attempts are permitted for this connection.
   * sspiPackagesUsed: &lt;array&gt;
@@ -115,6 +115,7 @@ Platforms older than Windows 2000 are unlikely to work. Other platforms may work
 ## Caveats
   * Microsoft provides a number of SSPI [packages](http://msdn.microsoft.com/en-us/library/windows/desktop/aa380502\(v=vs.85\).aspx). So far only NTLM and Negotiate have been tested working. Kerberos is not working. Contribution is encouraged.
   * Because basic authentication has not standarized on character encoding and browser implementation varies, if your AD supports non-ASCII user name and password, it is advised to turn off basic authentication unless you can assume all client browsers use utf-8 encoding as Chrome does. See this [stackoverflow question](http://stackoverflow.com/questions/702629/utf-8-characters-mangled-in-http-basic-auth-username) for details.
+  * It has been [reported](https://github.com/abbr/NodeSSPI/issues/23) that enabling *retrieveGroups* could take a heavy toll on AD domain controller in some circumstances. As an alternative, using a LDAP module that supports group filtering may improve performance.
 
 ## Installation
 Prerequisites: Except on a few [ platforms + Node version combinations](https://github.com/abbr/NodeSSPI-bin) where binary distribution is included, NodeSSPI uses node-gyp to compile C++ source code so you may need the compilers listed in [node-gyp](https://github.com/TooTallNate/node-gyp). You may also need to [update npm's bundled node gyp](https://github.com/TooTallNate/node-gyp/wiki/Updating-npm's-bundled-node-gyp).
