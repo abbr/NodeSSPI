@@ -603,7 +603,7 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 			if (!pBaton->user.empty()) {
 				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
 				if (pBaton->pGroups) {
-					auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
+					auto groups = Nan::New<v8::Array>(static_cast<uint32_t>(pBaton->pGroups->size()));
 					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
 						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
 					}
@@ -802,7 +802,7 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 			if (!pBaton->user.empty()) {
 				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
 				if (pBaton->pGroups) {
-					auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
+					auto groups = Nan::New<v8::Array>(static_cast<uint32_t>(pBaton->pGroups->size()));
 					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
 						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
 					}
