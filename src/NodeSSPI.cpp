@@ -7,17 +7,17 @@ sspi_module_rec sspiModuleInfo = { 0, };
 
 std::map<std::string, credHandleRec> credMap;
 
-class NodeSSPIException : public std::exception{
+class NodeSSPIException : public std::exception {
 public:
-	NodeSSPIException(const char * pMsg, const UINT http_code = 500) 
+	NodeSSPIException(const char * pMsg, const UINT http_code = 500)
 		: std::exception(pMsg), http_code(http_code) {
 	}
 	UINT http_code;
 };
 
-class Baton  {
+class Baton {
 public:
-	Baton(){
+	Baton() {
 		err = 0;
 		pGroups = 0;
 		basicDomain = 0;
@@ -25,16 +25,16 @@ public:
 		pSCR = 0;
 		isTesting = false;
 	}
-	~Baton(){
-		if(!callback.IsEmpty())	callback.Reset();
-		if(!req.IsEmpty()) req.Reset();
-		if(!res.IsEmpty()) res.Reset();
-		if(!conn.IsEmpty()) conn.Reset();
-		if(!opts.IsEmpty()) opts.Reset();
-		if(pGroups) delete pGroups;
-		if(err) delete err;
-		if(basicDomain) delete basicDomain;
-		if(pInToken) free(pInToken);
+	~Baton() {
+		if (!callback.IsEmpty())	callback.Reset();
+		if (!req.IsEmpty()) req.Reset();
+		if (!res.IsEmpty()) res.Reset();
+		if (!conn.IsEmpty()) conn.Reset();
+		if (!opts.IsEmpty()) opts.Reset();
+		if (pGroups) delete pGroups;
+		if (err) delete err;
+		if (basicDomain) delete basicDomain;
+		if (pInToken) free(pInToken);
 	}
 	uv_work_t request;
 	Nan::Persistent<v8::Function> callback;
@@ -87,30 +87,30 @@ void init_module()
 		}
 		sspiModuleInfo.supportsSSPI = TRUE;
 	}
-	catch(...) {
+	catch (...) {
 		sspi_module_cleanup();
 		throw;
 	}
 }
 
-void note_sspi_auth_failure(const Handle<Object> opts,const Handle<Object> req,Handle<Object> res){
+void note_sspi_auth_failure(const Handle<Object> opts, const Handle<Object> req, Handle<Object> res) {
 	int nWays = 0;
 	int nSSPIPkgs = 0;
 	bool offerBasic = false, offerSSPI = false;
-	if(opts->Get(Nan::New<String>("offerBasic").ToLocalChecked())->BooleanValue()){
+	if (opts->Get(Nan::New<String>("offerBasic").ToLocalChecked())->BooleanValue()) {
 		offerBasic = true;
 		nWays += 1;
 	}
-	if(opts->Get(Nan::New<String>("offerSSPI").ToLocalChecked())->BooleanValue()){
+	if (opts->Get(Nan::New<String>("offerSSPI").ToLocalChecked())->BooleanValue()) {
 		offerSSPI = true;
 		nSSPIPkgs = opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(Nan::New<String>("length").ToLocalChecked())->ToInteger()->Uint32Value();
 		nWays += nSSPIPkgs;
 	}
 	auto authHArr = Nan::New<v8::Array>(nWays);
 	int curIdx = 0;
-	if(offerBasic){
+	if (offerBasic) {
 		std::string basicStr("Basic");
-		if(opts->Has(Nan::New<String>("domain").ToLocalChecked())){
+		if (opts->Has(Nan::New<String>("domain").ToLocalChecked())) {
 			basicStr += " realm=\"";
 			String::Utf8Value dom(opts->Get(Nan::New<String>("domain").ToLocalChecked()));
 			basicStr += std::string(*dom);
@@ -118,30 +118,30 @@ void note_sspi_auth_failure(const Handle<Object> opts,const Handle<Object> req,H
 		}
 		authHArr->Set(curIdx++, Nan::New<String>(basicStr.c_str()).ToLocalChecked());
 	}
-	if(offerSSPI){
-		for(int i =0;i<nSSPIPkgs;i++){
-			authHArr->Set(curIdx++,opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(i));
+	if (offerSSPI) {
+		for (int i = 0; i < nSSPIPkgs; i++) {
+			authHArr->Set(curIdx++, opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(i));
 		}
 	}
 	Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), authHArr };
-	res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(res, 2, argv);
+	res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 2, argv);
 	res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(401));
 }
 
 void CleanupAuthenicationResources(Handle<Object> conn
 	, PCtxtHandle pSvrCtxHdl = NULL)
 {
-	try{
-		if(pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
+	try {
+		if (pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
 			sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
 			pSvrCtxHdl->dwUpper = pSvrCtxHdl->dwLower = 0;
 		}
-		if (conn->HasOwnProperty(Nan::New<String>("svrCtx").ToLocalChecked())){
+		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("svrCtx").ToLocalChecked()).FromMaybe(false)) {
 			Local<External> wrap = Local<External>::Cast(conn->Get(Nan::New<String>("svrCtx").ToLocalChecked())->ToObject()->GetInternalField(0));
 			sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
-			if(pSCR){
-				PCtxtHandle outPch =  &pSCR->server_context;
-				if(outPch && outPch->dwLower >0 && outPch->dwUpper >0){
+			if (pSCR) {
+				PCtxtHandle outPch = &pSCR->server_context;
+				if (outPch && outPch->dwLower > 0 && outPch->dwUpper > 0) {
 					sspiModuleInfo.functable->DeleteSecurityContext(outPch);
 					outPch->dwLower = outPch->dwUpper = 0;
 				}
@@ -150,15 +150,15 @@ void CleanupAuthenicationResources(Handle<Object> conn
 			conn->Delete(Nan::New<String>("svrCtx").ToLocalChecked());
 		}
 	}
-	catch(...){}
+	catch (...) {}
 }
 
 /*
 * get max token size defined by SSPI package
 */
-ULONG getMaxTokenSz(std::string pkgNm){
-	for (ULONG i = 0; i < sspiModuleInfo.numPackages; i++){
-		if (!pkgNm.compare(CT2A(sspiModuleInfo.pkgInfo[i].Name, CP_UTF8))){
+ULONG getMaxTokenSz(std::string pkgNm) {
+	for (ULONG i = 0; i < sspiModuleInfo.numPackages; i++) {
+		if (!pkgNm.compare(CT2A(sspiModuleInfo.pkgInfo[i].Name, CP_UTF8))) {
 			return sspiModuleInfo.pkgInfo[i].cbMaxToken;
 		}
 	}
@@ -171,7 +171,7 @@ ULONG getMaxTokenSz(std::string pkgNm){
 void GetSid(
 	LPCTSTR wszAccName,
 	PSID * ppSid
-	) 
+	)
 {
 	// Validate the input parameters.
 	if (wszAccName == NULL || ppSid == NULL)
@@ -188,7 +188,7 @@ void GetSid(
 	TCHAR * wszDomainName = NULL;
 	SID_NAME_USE eSidType;
 
-	try{
+	try {
 		// Create buffers for the SID and the domain name.
 		*ppSid = (PSID) new BYTE[dwSidBufferSize];
 		if (*ppSid == NULL)
@@ -205,7 +205,7 @@ void GetSid(
 
 
 		// Obtain the SID for the account name passed.
-		for ( ; ; )
+		for (; ; )
 		{
 
 			// Set the count variables to the buffer sizes and retrieve the SID.
@@ -247,7 +247,7 @@ void GetSid(
 				if (cchDomainName > dwDomainBufferSize)
 				{
 					// Reallocate memory for the domain name buffer.
-					delete [] wszDomainName;
+					delete[] wszDomainName;
 					wszDomainName = new TCHAR[cchDomainName];
 					if (wszDomainName == NULL)
 					{
@@ -264,19 +264,19 @@ void GetSid(
 			}
 		}
 	}
-	catch(...){
-		if(*ppSid) delete[] *ppSid;
-		if(wszDomainName) delete [] wszDomainName;
+	catch (...) {
+		if (*ppSid) delete[] * ppSid;
+		if (wszDomainName) delete[] wszDomainName;
 		throw;
 	}
-	delete [] wszDomainName;
+	delete[] wszDomainName;
 }
 
 /*
 * Acquire sharable server credentials by schema honoring expiry timestamp
 */
-void acquireServerCredential(std::string schema){
-	if (credMap.find(schema) == credMap.end()){
+void acquireServerCredential(std::string schema) {
+	if (credMap.find(schema) == credMap.end()) {
 		credHandleRec temp = { 0, 0 };
 		credMap[schema] = temp;
 	}
@@ -284,7 +284,7 @@ void acquireServerCredential(std::string schema){
 	SYSTEMTIME st;
 	GetSystemTime(&st); // gets current time
 	SystemTimeToFileTime(&st, &ft); // converts to file time format
-	if (CompareFileTime(&ft, (FILETIME *)(&credMap[schema].exp)) > 0){
+	if (CompareFileTime(&ft, (FILETIME *)(&credMap[schema].exp)) > 0) {
 		sspiModuleInfo.functable->FreeCredentialsHandle(&credMap[schema].credHandl);
 		// cred expired, re-generate
 		if (sspiModuleInfo.functable->AcquireCredentialsHandle(
@@ -297,95 +297,95 @@ void acquireServerCredential(std::string schema){
 			, NULL //pvGetKeyArgument
 			, &credMap[schema].credHandl //phCredential
 			, &credMap[schema].exp //ptsExpiry
-			) != SEC_E_OK){
-				throw new NodeSSPIException("Cannot get server credential");
+			) != SEC_E_OK) {
+			throw new NodeSSPIException("Cannot get server credential");
 		}
 
 	}
 }
 
 static ULONG gen_client_context(CredHandle *pCredentials
-	, LPCTSTR pkgNm	, BYTE *pInToken, ULONG *pInLen
-	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
-		SecBuffer inbuf, outbuf;
-		SecBufferDesc inbufdesc, outbufdesc;
-		outbuf.cbBuffer = *pOutlen;
-		outbuf.BufferType = SECBUFFER_TOKEN;
-		outbuf.pvBuffer = out;
-		outbufdesc.ulVersion = SECBUFFER_VERSION;
-		outbufdesc.cBuffers = 1;
-		outbufdesc.pBuffers = &outbuf;
-		BOOL havecontext = (outPch->dwLower || outPch->dwUpper);
+	, LPCTSTR pkgNm, BYTE *pInToken, ULONG *pInLen
+	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS) {
+	SecBuffer inbuf, outbuf;
+	SecBufferDesc inbufdesc, outbufdesc;
+	outbuf.cbBuffer = *pOutlen;
+	outbuf.BufferType = SECBUFFER_TOKEN;
+	outbuf.pvBuffer = out;
+	outbufdesc.ulVersion = SECBUFFER_VERSION;
+	outbufdesc.cBuffers = 1;
+	outbufdesc.pBuffers = &outbuf;
+	BOOL havecontext = (outPch->dwLower || outPch->dwUpper);
 
 
-		if (pInToken) {
-			inbuf.cbBuffer = *pInLen;
-			inbuf.BufferType = SECBUFFER_TOKEN;
-			inbuf.pvBuffer = pInToken;
-			inbufdesc.ulVersion = SECBUFFER_VERSION;
-			inbufdesc.cBuffers = 1;
-			inbufdesc.pBuffers = &inbuf;
-		}
-		ULONG ContextAttributes;
-		ULONG ss = sspiModuleInfo.functable->InitializeSecurityContext(
-			pCredentials //  _In_opt_     PCredHandle phCredential,
-			, havecontext ? outPch : NULL //  _In_opt_     PCtxtHandle phContext,
-			, (LPTSTR) pkgNm //  _In_opt_     SEC_CHAR *pszTargetName,
-			, ISC_REQ_DELEGATE //  _In_         ULONG fContextReq,
-			, 0 //  _In_         ULONG Reserved1,
-			, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
-			, pInToken ? &inbufdesc : NULL //  _In_opt_     PSecBufferDesc pInput,
-			, 0 //  _In_         ULONG Reserved2,
-			, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
-			, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
-			, &ContextAttributes //  _Out_        PULONG pfContextAttr,
-			, pTS //  _Out_opt_    PTimeStamp ptsExpiry
-			);
-		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
-			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
-		}
-		*pOutlen = outbufdesc.pBuffers->cbBuffer;
-		return ss;
+	if (pInToken) {
+		inbuf.cbBuffer = *pInLen;
+		inbuf.BufferType = SECBUFFER_TOKEN;
+		inbuf.pvBuffer = pInToken;
+		inbufdesc.ulVersion = SECBUFFER_VERSION;
+		inbufdesc.cBuffers = 1;
+		inbufdesc.pBuffers = &inbuf;
+	}
+	ULONG ContextAttributes;
+	ULONG ss = sspiModuleInfo.functable->InitializeSecurityContext(
+		pCredentials //  _In_opt_     PCredHandle phCredential,
+		, havecontext ? outPch : NULL //  _In_opt_     PCtxtHandle phContext,
+		, (LPTSTR)pkgNm //  _In_opt_     SEC_CHAR *pszTargetName,
+		, ISC_REQ_DELEGATE //  _In_         ULONG fContextReq,
+		, 0 //  _In_         ULONG Reserved1,
+		, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
+		, pInToken ? &inbufdesc : NULL //  _In_opt_     PSecBufferDesc pInput,
+		, 0 //  _In_         ULONG Reserved2,
+		, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
+		, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
+		, &ContextAttributes //  _Out_        PULONG pfContextAttr,
+		, pTS //  _Out_opt_    PTimeStamp ptsExpiry
+		);
+	if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
+		sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
+	}
+	*pOutlen = outbufdesc.pBuffers->cbBuffer;
+	return ss;
 }
 
 static ULONG gen_server_context(CredHandle *pCredentials
 	, BYTE *pInToken, ULONG *pInLen
-	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS){
-		SecBuffer inbuf, outbuf;
-		SecBufferDesc inbufdesc, outbufdesc;
-		BOOL havecontext = (outPch->dwLower || outPch->dwUpper);
-		outbuf.cbBuffer = *pOutlen;
-		outbuf.BufferType = SECBUFFER_TOKEN;
-		outbuf.pvBuffer = out;
-		outbufdesc.ulVersion = SECBUFFER_VERSION;
-		outbufdesc.cBuffers = 1;
-		outbufdesc.pBuffers = &outbuf;
+	, PCtxtHandle outPch, BYTE *out, ULONG * pOutlen, TimeStamp *pTS) {
+	SecBuffer inbuf, outbuf;
+	SecBufferDesc inbufdesc, outbufdesc;
+	BOOL havecontext = (outPch->dwLower || outPch->dwUpper);
+	outbuf.cbBuffer = *pOutlen;
+	outbuf.BufferType = SECBUFFER_TOKEN;
+	outbuf.pvBuffer = out;
+	outbufdesc.ulVersion = SECBUFFER_VERSION;
+	outbufdesc.cBuffers = 1;
+	outbufdesc.pBuffers = &outbuf;
 
-		inbuf.BufferType = SECBUFFER_TOKEN;
-		inbuf.cbBuffer = *pInLen;
-		inbuf.pvBuffer = pInToken;
-		inbufdesc.cBuffers = 1;
-		inbufdesc.ulVersion = SECBUFFER_VERSION;
-		inbufdesc.pBuffers = &inbuf;
-		ULONG ContextAttributes;
+	inbuf.BufferType = SECBUFFER_TOKEN;
+	inbuf.cbBuffer = *pInLen;
+	inbuf.pvBuffer = pInToken;
+	inbufdesc.cBuffers = 1;
+	inbufdesc.ulVersion = SECBUFFER_VERSION;
+	inbufdesc.pBuffers = &inbuf;
+	ULONG ContextAttributes;
 
-		ULONG ss;
-		ss = sspiModuleInfo.functable->AcceptSecurityContext(
-			pCredentials	//  _In_opt_     PCredHandle phCredential,
-			, havecontext ? outPch : NULL //  _Inout_opt_  PCtxtHandle phContext,
-			, &inbufdesc //  _In_opt_     PSecBufferDesc pInput,
-			, ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
-			, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
-			, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
-			, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
-			, &ContextAttributes //  _Out_        PULONG pfContextAttr,
-			, pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
-			);
-		if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
-			sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
-		}
-		*pOutlen = outbufdesc.pBuffers->cbBuffer;
-		return ss;
+	ULONG ss;
+	ss = sspiModuleInfo.functable->AcceptSecurityContext(
+		pCredentials	//  _In_opt_     PCredHandle phCredential,
+		, havecontext ? outPch : NULL //  _Inout_opt_  PCtxtHandle phContext,
+		, &inbufdesc //  _In_opt_     PSecBufferDesc pInput,
+		, ASC_REQ_DELEGATE //  _In_         ULONG fContextReq,
+		, SECURITY_NATIVE_DREP //  _In_         ULONG TargetDataRep,
+		, outPch //  _Inout_opt_  PCtxtHandle phNewContext,
+		, &outbufdesc //  _Inout_opt_  PSecBufferDesc pOutput,
+		, &ContextAttributes //  _Out_        PULONG pfContextAttr,
+		, pTS //  _Out_opt_    PTimeStamp ptsTimeStamp
+		);
+	if (ss == SEC_I_COMPLETE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE) {
+		sspiModuleInfo.functable->CompleteAuthToken(outPch, &outbufdesc);
+	}
+	*pOutlen = outbufdesc.pBuffers->cbBuffer;
+	return ss;
 }
 
 void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
@@ -400,7 +400,7 @@ void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
 	if ((GetTokenInformation(usertoken, TokenGroups, groupinfo
 		, groupinfosize, &groupinfosize))
 		|| (GetLastError() != ERROR_INSUFFICIENT_BUFFER)) {
-			return;
+		return;
 	}
 	groupinfo = (TOKEN_GROUPS *)malloc(groupinfosize);
 	if (!GetTokenInformation(usertoken, TokenGroups, groupinfo, groupinfosize, &groupinfosize)) {
@@ -409,22 +409,22 @@ void AddUserGroupsToConnection(HANDLE usertoken, vector<std::string> *pGroups)
 	for (i = 0; i < groupinfo->GroupCount; i++) {
 		grouplen = _MAX_PATH;
 		domainlen = _MAX_PATH;
-		if (LookupAccountSidW(NULL, groupinfo->Groups[i].Sid, 
+		if (LookupAccountSidW(NULL, groupinfo->Groups[i].Sid,
 			group_name, &grouplen,
 			domain_name, &domainlen,
 			&sidtype)) {
-				std::string grpNm = std::string(CW2A(domain_name, CP_UTF8))+std::string("\\")+std::string(CW2A(group_name, CP_UTF8));
-				pGroups->push_back(grpNm);
+			std::string grpNm = std::string(CW2A(domain_name, CP_UTF8)) + std::string("\\") + std::string(CW2A(group_name, CP_UTF8));
+			pGroups->push_back(grpNm);
 		}
 	}
-	free(groupinfo );
+	free(groupinfo);
 }
 
-void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups){
+void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups) {
 	// Retrieve user groups if requested, then call CleanupAuthenicationResources
 	HANDLE userToken;
 	ULONG ss;
-	try{
+	try {
 		if ((ss = sspiModuleInfo.functable->ImpersonateSecurityContext(pServerCtx)) != SEC_E_OK) {
 			throw new NodeSSPIException("Cannot impersonate user.");
 		}
@@ -438,78 +438,79 @@ void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups){
 		}
 		AddUserGroupsToConnection(userToken, pGroups);
 	}
-	catch(...){
+	catch (...) {
 		CloseHandle(userToken);
 		throw;
 	}
 }
 
-void WrapUpAsyncAfterAuth(Baton* pBaton){
+void WrapUpAsyncAfterAuth(Baton* pBaton) {
 	Local<Object> lRes = Nan::New(pBaton->res);
 	Local<Object> lOpts = Nan::New(pBaton->opts);
 	if (pBaton->err) {
 		lRes->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(pBaton->err->http_code));
 		pBaton->res.Reset(lRes);
 		Handle<Value> argv[] = { Nan::New<String>(pBaton->err->what()).ToLocalChecked() };
-		if(lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()){
-			lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(lRes, 1, argv);
+		if (lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
+			lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), lRes, 1, argv);
 		}
-		if(!pBaton->callback.IsEmpty()){
+		if (!pBaton->callback.IsEmpty()) {
 			Local<Function> lCb = Nan::New(pBaton->callback);
-			lCb->Call(lCb,1,argv);
+			lCb->Call(lCb, 1, argv);
 		}
-	} else {
-		if (lRes->Get(Nan::New<String>("statusCode").ToLocalChecked())->Int32Value() == 401){
-			Handle<Value> argv[] = { Nan::New<String>("Login aborted.").ToLocalChecked()};
-			if (lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()){
-				lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(lRes, 1, argv);
+	}
+	else {
+		if (lRes->Get(Nan::New<String>("statusCode").ToLocalChecked())->Int32Value() == 401) {
+			Handle<Value> argv[] = { Nan::New<String>("Login aborted.").ToLocalChecked() };
+			if (lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
+				lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), lRes, 1, argv);
 			}
 		}
-		if(!pBaton->callback.IsEmpty()){
+		if (!pBaton->callback.IsEmpty()) {
 			Local<Function> lCb = Nan::New(pBaton->callback);
-			lCb->Call(lCb,0,NULL);
+			lCb->Call(lCb, 0, NULL);
 		}
 	}
 	delete pBaton;
 }
 
-void AsyncBasicAuth(uv_work_t* req){
+void AsyncBasicAuth(uv_work_t* req) {
 	Baton* pBaton = static_cast<Baton*>(req->data);
-	try{
+	try {
 		std::string sspiPkg = pBaton->sspiPkg;
 		acquireServerCredential(sspiPkg);
 		BYTE * pInToken = pBaton->pInToken;
 		ULONG sz = pBaton->pInTokenSz;
 		// get domain, user name, password
 		std::string domainNnm, domain, nm, pswd, inStr((char*)pInToken);
-		if(pBaton->basicDomain) domain = *pBaton->basicDomain;
-		domainNnm = inStr.substr(0,inStr.find_first_of(":"));
-		if(domainNnm.length() == 0){
+		if (pBaton->basicDomain) domain = *pBaton->basicDomain;
+		domainNnm = inStr.substr(0, inStr.find_first_of(":"));
+		if (domainNnm.length() == 0) {
 			pBaton->ss = SEC_E_LOGON_DENIED;
 			return;
 		}
-		if(domainNnm.find("\\") != std::string::npos){
-			domain = domainNnm.substr(0,domainNnm.find_first_of("\\"));
-			nm = domainNnm.substr(domainNnm.find_first_of("\\")+1);
+		if (domainNnm.find("\\") != std::string::npos) {
+			domain = domainNnm.substr(0, domainNnm.find_first_of("\\"));
+			nm = domainNnm.substr(domainNnm.find_first_of("\\") + 1);
 		}
-		else{
+		else {
 			nm = domainNnm;
 		}
-		pswd = inStr.substr(inStr.find_first_of(":")+1);
+		pswd = inStr.substr(inStr.find_first_of(":") + 1);
 		// acquire client credential
 		SEC_WINNT_AUTH_IDENTITY authIden;
 
 		CA2T domaint(domain.c_str(), CP_UTF8);
-		authIden.Domain = (unsigned short *) LPTSTR(domaint);
+		authIden.Domain = (unsigned short *)LPTSTR(domaint);
 		authIden.DomainLength = static_cast<unsigned long>(_tcslen(domaint));
 		CA2T nmt(nm.c_str(), CP_UTF8);
-		authIden.User = (unsigned short *) LPTSTR(nmt);
+		authIden.User = (unsigned short *)LPTSTR(nmt);
 		authIden.UserLength = static_cast<unsigned long>(_tcslen(nmt));
 		CA2T pswt(pswd.c_str(), CP_UTF8);
 		authIden.Password = (unsigned short *)LPTSTR(pswt);
 		authIden.PasswordLength = static_cast<unsigned long>(_tcslen(pswt));
 #ifdef UNICODE
-		authIden.Flags  = SEC_WINNT_AUTH_IDENTITY_UNICODE;
+		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_UNICODE;
 #else
 		authIden.Flags = SEC_WINNT_AUTH_IDENTITY_ANSI;
 #endif
@@ -522,12 +523,12 @@ void AsyncBasicAuth(uv_work_t* req){
 		TimeStamp clientCredTs;
 		if (sspiModuleInfo.functable->AcquireCredentialsHandle(
 			NULL,
-			(LPTSTR) CA2T(sspiPkg.c_str(), CP_UTF8),
+			(LPTSTR)CA2T(sspiPkg.c_str(), CP_UTF8),
 			SECPKG_CRED_OUTBOUND,
-			NULL, ((pBaton->isTesting)?NULL:&authIden), NULL, NULL,
+			NULL, ((pBaton->isTesting) ? NULL : &authIden), NULL, NULL,
 			&clientCred,
-			&clientCredTs) != SEC_E_OK){
-				throw new NodeSSPIException("Cannot acquire client credential.");
+			&clientCredTs) != SEC_E_OK) {
+			throw new NodeSSPIException("Cannot acquire client credential.");
 		};
 
 		// perform authentication loop
@@ -536,7 +537,7 @@ void AsyncBasicAuth(uv_work_t* req){
 		ULONG ss;
 		unique_ptr<BYTE[]> pServerbuf(new BYTE[tokSz]), pClientBuf(new BYTE[tokSz]);
 		cbOut = 0;
-		CtxtHandle client_context = {0,0};
+		CtxtHandle client_context = { 0,0 };
 		TimeStamp client_ctxtexpiry;
 		do {
 			cbIn = cbOut;
@@ -550,7 +551,7 @@ void AsyncBasicAuth(uv_work_t* req){
 				}
 				cbIn = cbOut;
 				cbOut = tokSz;
-				ss = gen_server_context(&credMap[sspiPkg].credHandl,pServerbuf.get()
+				ss = gen_server_context(&credMap[sspiPkg].credHandl, pServerbuf.get()
 					, &cbIn, pServerCtx, clientbuf, &cbOut, &pSCR->server_ctxtexpiry);
 			}
 		} while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_I_COMPLETE_AND_CONTINUE);
@@ -563,23 +564,23 @@ void AsyncBasicAuth(uv_work_t* req){
 			SECURITY_STATUS ss;
 			char *retval = NULL;
 
-			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(pServerCtx, 
-				SECPKG_ATTR_NAMES, 
+			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(pServerCtx,
+				SECPKG_ATTR_NAMES,
 				&names)
 				) == SEC_E_OK) {
 				pBaton->user = CT2A(names.sUserName, CP_UTF8);
-					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
-					if(pBaton->retrieveGroups){
-						pBaton->pGroups = new vector<std::string>();
-						RetrieveUserGroups(pServerCtx,pBaton->pGroups);
-					}
+				sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+				if (pBaton->retrieveGroups) {
+					pBaton->pGroups = new vector<std::string>();
+					RetrieveUserGroups(pServerCtx, pBaton->pGroups);
+				}
 			}
-			else{
+			else {
 				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 		}
 	}
-	catch (NodeSSPIException *ex){
+	catch (NodeSSPIException *ex) {
 		pBaton->err = ex;
 	}
 }
@@ -587,61 +588,61 @@ void AsyncBasicAuth(uv_work_t* req){
 void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	Nan::HandleScope scope;
 	Baton* pBaton = static_cast<Baton*>(uvReq->data);
-	try{
+	try {
 		ULONG ss = pBaton->ss;
 		auto conn = Nan::New(pBaton->conn);
 		auto req = Nan::New(pBaton->req);
 		auto res = Nan::New(pBaton->res);
 		auto opts = Nan::New(pBaton->opts);
-		if(pBaton->err) throw pBaton->err;
+		if (pBaton->err) throw pBaton->err;
 		auto pServerCtx = &pBaton->pSCR->server_context;
-		CleanupAuthenicationResources(conn , pServerCtx);
+		CleanupAuthenicationResources(conn, pServerCtx);
 		switch (ss) {
 		case SEC_E_OK:
-			{
-				if (!pBaton->user.empty()) {
-					conn->Set(Nan::New<String>("user").ToLocalChecked(),Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
-					if(pBaton->pGroups){
-						auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
-						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-							groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
-						}
-						conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
+		{
+			if (!pBaton->user.empty()) {
+				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
+				if (pBaton->pGroups) {
+					auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
+					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
+						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
 					}
+					conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
 				}
-				else{
-					throw new NodeSSPIException("Cannot obtain user name.");
-				}
-				break;
 			}
+			else {
+				throw new NodeSSPIException("Cannot obtain user name.");
+			}
+			break;
+		}
 		case SEC_E_INVALID_HANDLE:
 		case SEC_E_INTERNAL_ERROR:
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
-			{
-				res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
-				break;
-			}
+		{
+			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
+			break;
+		}
 		case SEC_E_INVALID_TOKEN:
 		case SEC_E_LOGON_DENIED:
 		default:
-			{
-				note_sspi_auth_failure(opts,req,res);
-				if(!conn->HasOwnProperty(Nan::New<String>("remainingAttempts").ToLocalChecked())){
-					conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-						,Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value()-1));
-				}
-				int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
-				if(remainingAttmpts<=0){
-					throw new NodeSSPIException("Max login attempts reached.",403);
-				}
+		{
+			note_sspi_auth_failure(opts, req, res);
+			if (!conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
 				conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-					,Nan::New<Integer>(remainingAttmpts-1));
-				break;
+					, Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value() - 1));
 			}
+			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
+			if (remainingAttmpts <= 0) {
+				throw new NodeSSPIException("Max login attempts reached.", 403);
+			}
+			conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
+				, Nan::New<Integer>(remainingAttmpts - 1));
+			break;
+		}
 		}
 	}
-	catch (NodeSSPIException *ex){
+	catch (NodeSSPIException *ex) {
 		pBaton->err = ex;
 	}
 	// SCR doesn't span across requests for basic auth
@@ -649,34 +650,34 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	WrapUpAsyncAfterAuth(pBaton);
 }
 
-void basic_authentication(const Local<Object> opts,const Local<Object> req
-	,Local<Object> res, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, Local<Function> cb){
-		std::string sspiPkg(sspiModuleInfo.defaultPackage);
-		if(opts->Has(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())){
-			auto firstSSPIPackage = opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(0);
-			sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
-		}
-		Baton *pBaton = new Baton();
-		pBaton->request.data = pBaton;
-		pBaton->callback.Reset(cb);
-		pBaton->req.Reset(req);
-		pBaton->conn.Reset(conn);
-		pBaton->res.Reset(res);
-		pBaton->opts.Reset(opts);
-		pBaton->sspiPkg = sspiPkg;
-		pBaton->pInToken = pInToken;
-		pBaton->pInTokenSz = sz;
-		pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
-		if (req->HasOwnProperty(Nan::New<String>("isTestingNodeSSPI").ToLocalChecked())
-			&& req->Get(Nan::New<String>("isTestingNodeSSPI").ToLocalChecked())->BooleanValue()){
-				pBaton->isTesting = true;
-		}
-		if (opts->Has(Nan::New<String>("domain").ToLocalChecked())){
-			pBaton->basicDomain = new std::string(*String::Utf8Value(opts->Get(Nan::New<String>("domain").ToLocalChecked())));
-		}
-		uv_queue_work(uv_default_loop(), &pBaton->request,
-			AsyncBasicAuth, AsyncAfterBasicAuth);
+void basic_authentication(const Local<Object> opts, const Local<Object> req
+	, Local<Object> res, Local<Object> conn, BYTE *pInToken
+	, ULONG sz, Local<Function> cb) {
+	std::string sspiPkg(sspiModuleInfo.defaultPackage);
+	if (opts->Has(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())) {
+		auto firstSSPIPackage = opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(0);
+		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
+	}
+	Baton *pBaton = new Baton();
+	pBaton->request.data = pBaton;
+	pBaton->callback.Reset(cb);
+	pBaton->req.Reset(req);
+	pBaton->conn.Reset(conn);
+	pBaton->res.Reset(res);
+	pBaton->opts.Reset(opts);
+	pBaton->sspiPkg = sspiPkg;
+	pBaton->pInToken = pInToken;
+	pBaton->pInTokenSz = sz;
+	pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
+	if (req->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("isTestingNodeSSPI").ToLocalChecked()).FromMaybe(false)
+		&& req->Get(Nan::New<String>("isTestingNodeSSPI").ToLocalChecked())->BooleanValue()) {
+		pBaton->isTesting = true;
+	}
+	if (opts->Has(Nan::New<String>("domain").ToLocalChecked())) {
+		pBaton->basicDomain = new std::string(*String::Utf8Value(opts->Get(Nan::New<String>("domain").ToLocalChecked())));
+	}
+	uv_queue_work(uv_default_loop(), &pBaton->request,
+		AsyncBasicAuth, AsyncAfterBasicAuth);
 }
 
 NAN_METHOD(onConnectionClose) {
@@ -684,9 +685,9 @@ NAN_METHOD(onConnectionClose) {
 	CleanupAuthenicationResources(conn);
 }
 
-void AsyncSSPIAuth(uv_work_t* req){
+void AsyncSSPIAuth(uv_work_t* req) {
 	Baton* pBaton = static_cast<Baton*>(req->data);
-	try{
+	try {
 		std::string schema = pBaton->sspiPkg;
 		acquireServerCredential(schema);
 		PCtxtHandle outPch = &pBaton->pSCR->server_context;
@@ -700,7 +701,7 @@ void AsyncSSPIAuth(uv_work_t* req){
 		ULONG ss = gen_server_context(&credMap[schema].credHandl
 			, pInToken, &sz, outPch, pOutBuf, &tokSz, pTS);
 		pBaton->ss = ss;
-		if(pBaton->pInToken) free(pBaton->pInToken);
+		if (pBaton->pInToken) free(pBaton->pInToken);
 		pBaton->pInToken = pOutBuf;
 		pBaton->pInTokenSz = tokSz;
 		if (ss == SEC_E_OK)
@@ -710,31 +711,31 @@ void AsyncSSPIAuth(uv_work_t* req){
 			SECURITY_STATUS ss;
 			char *retval = NULL;
 
-			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(outPch, 
-				SECPKG_ATTR_NAMES, 
+			if ((ss = sspiModuleInfo.functable->QueryContextAttributes(outPch,
+				SECPKG_ATTR_NAMES,
 				&names)
 				) == SEC_E_OK) {
-					PSID pSid = NULL;
-					GetSid(names.sUserName, &pSid);
-					if(IsWellKnownSid(pSid, WinAnonymousSid)){
-						pBaton->ss = SEC_E_INVALID_TOKEN;
+				PSID pSid = NULL;
+				GetSid(names.sUserName, &pSid);
+				if (IsWellKnownSid(pSid, WinAnonymousSid)) {
+					pBaton->ss = SEC_E_INVALID_TOKEN;
+				}
+				else {
+					pBaton->user = std::string(CT2A(names.sUserName, CP_UTF8));
+					if (pBaton->retrieveGroups) {
+						pBaton->pGroups = new vector<std::string>();
+						RetrieveUserGroups(outPch, pBaton->pGroups);
 					}
-					else{
-						pBaton->user = std::string(CT2A(names.sUserName, CP_UTF8));
-						if(pBaton->retrieveGroups){
-							pBaton->pGroups = new vector<std::string>();
-							RetrieveUserGroups(outPch,pBaton->pGroups);
-						}
-					}
-					delete[] pSid;
-					sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
+				}
+				delete[] pSid;
+				sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 			}
-			else{
+			else {
 				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 		}
 	}
-	catch (NodeSSPIException *ex){
+	catch (NodeSSPIException *ex) {
 		pBaton->err = ex;
 	}
 }
@@ -745,122 +746,122 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 	BYTE *  pOutBuf = pBaton->pInToken;
 	auto opts = Nan::New(pBaton->opts);
 	auto res = Nan::New(pBaton->res);
-	try{
+	try {
 		ULONG ss = pBaton->ss;
 		auto conn = Nan::New(pBaton->conn);
 		auto req = Nan::New(pBaton->req);
-		if(pBaton->err) throw pBaton->err;
+		if (pBaton->err) throw pBaton->err;
 		ULONG tokSz = pBaton->pInTokenSz;
 		switch (ss) {
 		case SEC_I_COMPLETE_NEEDED:
 		case SEC_I_CONTINUE_NEEDED:
-		case SEC_I_COMPLETE_AND_CONTINUE: 
-			{
-				CStringA base64;
-				int base64Length = Base64EncodeGetRequiredLength(tokSz);
-				Base64Encode(pOutBuf,
-					tokSz,
-					base64.GetBufferSetLength(base64Length),
-					&base64Length, ATL_BASE64_FLAG_NOCRLF);
-				base64.ReleaseBufferSetLength(base64Length);
-				std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
-				Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), Nan::New<String>(authHStr.c_str()).ToLocalChecked() };
-				res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(res, 2, argv);
-				res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(401));
-				break;
-			}
+		case SEC_I_COMPLETE_AND_CONTINUE:
+		{
+			CStringA base64;
+			int base64Length = Base64EncodeGetRequiredLength(tokSz);
+			Base64Encode(pOutBuf,
+				tokSz,
+				base64.GetBufferSetLength(base64Length),
+				&base64Length, ATL_BASE64_FLAG_NOCRLF);
+			base64.ReleaseBufferSetLength(base64Length);
+			std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
+			Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), Nan::New<String>(authHStr.c_str()).ToLocalChecked() };
+			res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 2, argv);
+			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(401));
+			break;
+		}
 		case SEC_E_INVALID_TOKEN:
 		case SEC_E_LOGON_DENIED:
-			{
-				note_sspi_auth_failure(opts,req,res);
-				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-				if(!conn->HasOwnProperty(Nan::New<String>("remainingAttempts").ToLocalChecked())){
-					conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-						,Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value()-1));
-				}
-				int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
-				if(remainingAttmpts<=0){
-					throw new NodeSSPIException("Max login attempts reached.",403);
-				}
+		{
+			note_sspi_auth_failure(opts, req, res);
+			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
+			if (!conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
 				conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-					,Nan::New<Integer>(remainingAttmpts-1));
-				break;
+					, Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value() - 1));
 			}
+			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
+			if (remainingAttmpts <= 0) {
+				throw new NodeSSPIException("Max login attempts reached.", 403);
+			}
+			conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
+				, Nan::New<Integer>(remainingAttmpts - 1));
+			break;
+		}
 		case SEC_E_INVALID_HANDLE:
 		case SEC_E_INTERNAL_ERROR:
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
-			{
-				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-				res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
-				break;
-			}
+		{
+			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
+			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
+			break;
+		}
 		case SEC_E_OK:
-			{
-				CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-				if (!pBaton->user.empty()) {
-					conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
-					if(pBaton->pGroups){
-						auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
-						for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-							groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
-						}
-						conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
+		{
+			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
+			if (!pBaton->user.empty()) {
+				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
+				if (pBaton->pGroups) {
+					auto groups = Nan::New<v8::Array>(pBaton->pGroups->size());
+					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
+						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
 					}
+					conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
+				}
 
-				}
-				else{
-					throw new NodeSSPIException("Cannot obtain user name.");
-				}
-				break;
 			}
+			else {
+				throw new NodeSSPIException("Cannot obtain user name.");
+			}
+			break;
+		}
 		}
 	}
-	catch (NodeSSPIException *ex){
+	catch (NodeSSPIException *ex) {
 		pBaton->err = ex;
 	}
 	WrapUpAsyncAfterAuth(pBaton);
 }
 
-void sspi_authentication(const Local<Object> opts,const Local<Object> req
-	,Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, Local<Function> cb){
-		// acquire server context from request.connection
-		sspi_connection_rec *pSCR = 0;
-		if (conn->HasOwnProperty(Nan::New<String>("svrCtx").ToLocalChecked())){
-			// this is not initial request
-			Local<External> wrap = Local<External>::Cast(conn->Get(Nan::New<String>("svrCtx").ToLocalChecked())->ToObject()->GetInternalField(0));
-			pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
-		}
-		else{
-			pSCR = new sspi_connection_rec();
-			pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
-			Isolate* isolate = Isolate::GetCurrent();
-			Handle<ObjectTemplate> svrCtx_templ = Nan::New<ObjectTemplate>();
-			svrCtx_templ->SetInternalFieldCount(1);
-			Local<Object> lObj = svrCtx_templ->NewInstance();
-			lObj->SetInternalField(0, Nan::New<External>(pSCR));
-			// use conn socket to hold pSCR
-			conn->Set(Nan::New<String>("svrCtx").ToLocalChecked(), lObj);
-			// hook to socket close event to clean up abandoned in-progress authentications
-			// necessary to defend against attacks similar to sync flood 
-			Handle<Value> argv[] = { Nan::New<String>("close").ToLocalChecked(), Nan::New<FunctionTemplate>(onConnectionClose)->GetFunction() };
-			conn->Get(Nan::New<String>("on").ToLocalChecked())->ToObject()->CallAsFunction(conn, 2, argv);
-		}
-		Baton *pBaton = new Baton();
-		pBaton->request.data = pBaton;
-		pBaton->callback.Reset(cb);
-		pBaton->req.Reset(req);
-		pBaton->conn.Reset(conn);
-		pBaton->res.Reset(res);
-		pBaton->opts.Reset(opts);
-		pBaton->sspiPkg = schema;
-		pBaton->pInToken = pInToken;
-		pBaton->pInTokenSz = sz;
-		pBaton->pSCR = pSCR;
-		pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
-		uv_queue_work(uv_default_loop(), &pBaton->request,
-			AsyncSSPIAuth, AsyncAfterSSPIAuth);
+void sspi_authentication(const Local<Object> opts, const Local<Object> req
+	, Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
+	, ULONG sz, Local<Function> cb) {
+	// acquire server context from request.connection
+	sspi_connection_rec *pSCR = 0;
+	if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("svrCtx").ToLocalChecked()).FromMaybe(false)) {
+		// this is not initial request
+		Local<External> wrap = Local<External>::Cast(conn->Get(Nan::New<String>("svrCtx").ToLocalChecked())->ToObject()->GetInternalField(0));
+		pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
+	}
+	else {
+		pSCR = new sspi_connection_rec();
+		pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
+		Isolate* isolate = Isolate::GetCurrent();
+		Handle<ObjectTemplate> svrCtx_templ = Nan::New<ObjectTemplate>();
+		svrCtx_templ->SetInternalFieldCount(1);
+		Local<Object> lObj = svrCtx_templ->NewInstance();
+		lObj->SetInternalField(0, Nan::New<External>(pSCR));
+		// use conn socket to hold pSCR
+		conn->Set(Nan::New<String>("svrCtx").ToLocalChecked(), lObj);
+		// hook to socket close event to clean up abandoned in-progress authentications
+		// necessary to defend against attacks similar to sync flood 
+		Handle<Value> argv[] = { Nan::New<String>("close").ToLocalChecked(), Nan::New<FunctionTemplate>(onConnectionClose)->GetFunction() };
+		conn->Get(Nan::New<String>("on").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), conn, 2, argv);
+	}
+	Baton *pBaton = new Baton();
+	pBaton->request.data = pBaton;
+	pBaton->callback.Reset(cb);
+	pBaton->req.Reset(req);
+	pBaton->conn.Reset(conn);
+	pBaton->res.Reset(res);
+	pBaton->opts.Reset(opts);
+	pBaton->sspiPkg = schema;
+	pBaton->pInToken = pInToken;
+	pBaton->pInTokenSz = sz;
+	pBaton->pSCR = pSCR;
+	pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
+	uv_queue_work(uv_default_loop(), &pBaton->request,
+		AsyncSSPIAuth, AsyncAfterSSPIAuth);
 }
 
 /*
@@ -873,15 +874,15 @@ NAN_METHOD(Authenticate) {
 	auto res = info[2]->ToObject();
 	Local<Object> conn;
 	Local<Function> cb;
-	if(info[3]->IsFunction()) {
+	if (info[3]->IsFunction()) {
 		cb = Local<Function>::Cast(info[3]);
 	}
-	try{
+	try {
 		auto req = info[1]->ToObject();
 		conn = req->Get(Nan::New<String>("connection").ToLocalChecked())->ToObject();
-		if (conn->HasOwnProperty(Nan::New<String>("user").ToLocalChecked())){
-			if(!cb.IsEmpty()) {
-				cb->Call(cb,0,NULL);
+		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("user").ToLocalChecked()).FromMaybe(false)) {
+			if (!cb.IsEmpty()) {
+				cb->Call(cb, 0, NULL);
 			}
 			return;
 		}
@@ -890,22 +891,22 @@ NAN_METHOD(Authenticate) {
 		}
 		auto headers = req->Get(Nan::New<String>("headers").ToLocalChecked())->ToObject();
 
-		if (conn->HasOwnProperty(Nan::New<String>("remainingAttempts").ToLocalChecked())){
+		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
 			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
-			if(remainingAttmpts<0){
-				throw NodeSSPIException("Max login attempts reached.",403);
+			if (remainingAttmpts < 0) {
+				throw NodeSSPIException("Max login attempts reached.", 403);
 			}
 		}
 
-		if (!headers->Has(Nan::New<String>("authorization").ToLocalChecked())){
-			note_sspi_auth_failure(opts,req,res);
+		if (!headers->Has(Nan::New<String>("authorization").ToLocalChecked())) {
+			note_sspi_auth_failure(opts, req, res);
 			if (opts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()
 				&& !req->Get(Nan::New<String>("connection").ToLocalChecked())->ToObject()->Has(Nan::New<String>("user").ToLocalChecked())
-				){
-				res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(res, 0, NULL);
+				) {
+				res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 0, NULL);
 			}
-			if(!cb.IsEmpty())  {
-				cb->Call(cb,0, NULL);
+			if (!cb.IsEmpty()) {
+				cb->Call(cb, 0, NULL);
 			}
 			return;
 		}
@@ -916,25 +917,25 @@ NAN_METHOD(Authenticate) {
 		ssin >> strToken;
 		// base64 decode strToken
 		int sz = static_cast<int>(strToken.length());
-		BYTE * pToken = static_cast<BYTE*>(calloc(sz,1));
-		if (!Base64Decode(strToken.c_str(), sz, pToken, &sz)){
+		BYTE * pToken = static_cast<BYTE*>(calloc(sz, 1));
+		if (!Base64Decode(strToken.c_str(), sz, pToken, &sz)) {
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
-		if(_stricmp(schema.c_str(),"basic")==0){
-			basic_authentication(opts,req,res,conn, pToken, sz, cb);
+		if (_stricmp(schema.c_str(), "basic") == 0) {
+			basic_authentication(opts, req, res, conn, pToken, sz, cb);
 		}
-		else{
-			sspi_authentication(opts,req,res,schema,conn, pToken, sz, cb);
+		else {
+			sspi_authentication(opts, req, res, schema, conn, pToken, sz, cb);
 		}
 	}
-	catch (NodeSSPIException &ex){
+	catch (NodeSSPIException &ex) {
 		CleanupAuthenicationResources(conn);
 		info[2]->ToObject()->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(ex.http_code));
 		Handle<Value> argv[] = { Nan::New<String>(ex.what()).ToLocalChecked() };
-		if (opts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()){
-			res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(res, 1, argv);
+		if (opts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
+			res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 1, argv);
 		}
-		if(!cb.IsEmpty())  cb->Call(cb,1,argv);
+		if (!cb.IsEmpty())  cb->Call(cb, 1, argv);
 	}
 }
 
