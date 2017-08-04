@@ -98,9 +98,9 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
     *   If option `retrieveGroups` is *true*, group names are populated into field `req.connection.userGroups` as an array.
   * Otherwise
     *   If option `authoritative` is set to *true*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body as well as the *err* parameter of the callback function. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
-      *   403 if max login attempts are reached
-      *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
-      *   500 when NodeSSPI encountered exception it cannot handle.
+        *   403 if max login attempts are reached
+        *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
+        *   500 when NodeSSPI encountered exception it cannot handle.
     *  If option `authoritative` is not set to *true*, then the output is the same as authoritative except NodeSSPI will not write error message to response body, nor block the request, i.e. it will not call `res.end(err)`. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
