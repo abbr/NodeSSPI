@@ -55,6 +55,8 @@ main.prototype.authenticate = function (req, res, cb) {
   }
   if (this.opts.perRequestAuth) {
     delete req.connection.user;
+    delete req.connection.userSid;
+    delete req.connection.userGroups;
   }
   binding.authenticate(this.opts, req, res, cb);
 }

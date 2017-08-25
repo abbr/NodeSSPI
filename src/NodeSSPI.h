@@ -18,6 +18,7 @@
 //#include <windows.h>
 //#include <winsock2.h>
 #include <sspi.h>
+#include <sddl.h>
 //#include <security.h>
 
 #define WINNT_SECURITY_DLL L"SECURITY.DLL"

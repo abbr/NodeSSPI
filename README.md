@@ -21,35 +21,40 @@ Despite of the resemblance, NodeSSPI is not an exact feature-wize like-for-like 
 Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js. In fact, at runtime it has no npm module dependencies.
 
 ```
-'use strict';
+'use strict'
 
-var express = require('express');
-var app = express();
-var server = require('http').createServer(app);
+var express = require('express')
+var app = express()
+var server = require('http').createServer(app)
 app.use(function (req, res, next) {
-  var nodeSSPI = require('node-sspi');
+  var nodeSSPI = require('node-sspi')
   var nodeSSPIObj = new nodeSSPI({
     retrieveGroups: true
-  });
+  })
   nodeSSPIObj.authenticate(req, res, function(err){
-    res.finished || next();
-  });
-});
-app.use(function (req, res, next) {
-  var out = 'Hello ' + req.connection.user + '! You belong to following groups:<br/><ul>';
+    res.finished || next()
+  })
+})
+app.use(function(req, res, next) {
+  var out =
+    'Hello ' +
+    req.connection.user +
+    '! Your sid is ' +
+    req.connection.userSid +
+    ' and you belong to following groups:<br/><ul>'
   if (req.connection.userGroups) {
     for (var i in req.connection.userGroups) {
-      out += '<li>'+ req.connection.userGroups[i] + '</li><br/>\n';
+      out += '<li>' + req.connection.userGroups[i] + '</li><br/>\n'
     }
   }
-  out += '</ul>';
-  res.send(out);
-});
+  out += '</ul>'
+  res.send(out)
+})
 // Start server
-var port = process.env.PORT || 3000;
+var port = process.env.PORT || 3000
 server.listen(port, function () {
-  console.log('Express server listening on port %d in %s mode', port, app.get('env'));
-});
+  console.log('Express server listening on port %d in %s mode', port, app.get('env'))
+})
 ```
 If you put above code in a file, say *index.js*, and run following commands from the same directory:
 ```
@@ -59,7 +64,7 @@ node index.js
 ```
 then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
 ```
-Hello <mypc>\<me>! You belong to following groups:
+Hello <mypc>\<me>! Your sid is S-*-*-**-**********-**********-**********-**** and you belong to following groups:
 *<mypc>\None
 *\Everyone
 *<mypc>\HelpLibraryUpdaters
@@ -94,14 +99,16 @@ The call to `new nodeSSPI(opts)` in above code can take following options:
       - no default value. This is the domain name (a.k.a realm) used by basic authentication if user doesn't prefix their login name with *&lt;domain_name&gt;\\*. 
 
 ### Outputs
-  * Upon successful authentication, authenticated user name is populated into field `req.connection.user` 
-    *   If option `retrieveGroups` is *true*, group names are populated into field `req.connection.userGroups` as an array.
-  * Otherwise
-    *   If option `authoritative` is set to *true*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body as well as the *err* parameter of the callback function. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
-        *   403 if max login attempts are reached
-        *   401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
-        *   500 when NodeSSPI encountered exception it cannot handle.
-    *  If option `authoritative` is not set to *true*, then the output is the same as authoritative except NodeSSPI will not write error message to response body, nor block the request, i.e. it will not call `res.end(err)`. This allows the caller and downstream middleware to make decision.
+  * upon successful authentication
+    * authenticated user name is populated into field `req.connection.user`
+    * authenticated user sid is populated into field `req.connection.userSid` 
+    * if option `retrieveGroups` is *true*, group names are populated into field `req.connection.userGroups` as an array.
+  * otherwise
+    * if option `authoritative` is set to *true*, then the request will be blocked. The reason of blocking (i.e. error message) is written to response body as well as the *err* parameter of the callback function. Some response headers such as *WWW-Authenticate* may get filled out, and one of following HTTP response codes will be populated to field `res.statusCode`:
+      * 403 if max login attempts are reached
+      * 401 for all in-progress authentications, including protocols that require multiple round trips or if max login attempts has not been reached.
+      * 500 when NodeSSPI encountered exception it cannot handle.
+    * if option `authoritative` is not set to *true*, then the output is the same as authoritative except NodeSSPI will not write error message to response body, nor block the request, i.e. it will not call `res.end(err)`. This allows the caller and downstream middleware to make decision.
 
 ## Platforms
 NodeSSPI has been tested working on these Windows platforms:
@@ -124,7 +131,7 @@ To install, run
 ```npm install node-sspi```
 
 ## Development
-Prerequisites: Visual Studio 2013
+Prerequisites: Visual Studio 2017
 
 Run:
 
@@ -139,7 +146,7 @@ npm install --debug
 node ..\..\server.js
 ```
 
-To debug, open NodeSSPI.sln in VS2013 and attach to node.js process. 
+To debug, open NodeSSPI.sln in VS2017 and attach to node.js process. 
 
 
 ## Support

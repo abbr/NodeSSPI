@@ -49,6 +49,7 @@ public:
 	std::string sspiPkg;
 	ULONG ss;
 	std::string user;
+	std::string userSid;
 	bool retrieveGroups;
 	NodeSSPIException * err;
 	std::vector<std::string> *pGroups;
@@ -569,6 +570,13 @@ void AsyncBasicAuth(uv_work_t* req) {
 				&names)
 				) == SEC_E_OK) {
 				pBaton->user = CT2A(names.sUserName, CP_UTF8);
+				PSID pSid = NULL;
+				LPTSTR StringSid;
+				GetSid(names.sUserName, &pSid);
+				ConvertSidToStringSid(pSid, &StringSid);
+				delete[] pSid;
+				pBaton->userSid = std::string(CT2A(StringSid, CP_UTF8));
+				LocalFree(StringSid);
 				sspiModuleInfo.functable->FreeContextBuffer(names.sUserName);
 				if (pBaton->retrieveGroups) {
 					pBaton->pGroups = new vector<std::string>();
@@ -612,6 +620,9 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 			}
 			else {
 				throw new NodeSSPIException("Cannot obtain user name.");
+			}
+			if (!pBaton->userSid.empty()) {
+				conn->Set(Nan::New<String>("userSid").ToLocalChecked(), Nan::New<String>(pBaton->userSid.c_str()).ToLocalChecked());
 			}
 			break;
 		}
@@ -722,6 +733,11 @@ void AsyncSSPIAuth(uv_work_t* req) {
 				}
 				else {
 					pBaton->user = std::string(CT2A(names.sUserName, CP_UTF8));
+					LPTSTR StringSid;
+					GetSid(names.sUserName, &pSid);
+					ConvertSidToStringSid(pSid, &StringSid);
+					pBaton->userSid = std::string(CT2A(StringSid, CP_UTF8));
+					LocalFree(StringSid);
 					if (pBaton->retrieveGroups) {
 						pBaton->pGroups = new vector<std::string>();
 						RetrieveUserGroups(outPch, pBaton->pGroups);
@@ -813,6 +829,10 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 			else {
 				throw new NodeSSPIException("Cannot obtain user name.");
 			}
+			if (!pBaton->userSid.empty()) {
+				conn->Set(Nan::New<String>("userSid").ToLocalChecked(), Nan::New<String>(pBaton->userSid.c_str()).ToLocalChecked());
+			}
+
 			break;
 		}
 		}
