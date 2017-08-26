@@ -1,6 +1,6 @@
 {
   "name": "node-sspi",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Windows SSPI server-side authentication for Node",
   "main": "index.js",
   "author": "Fred Wen<wenfred@gmail.com>",
@@ -13,7 +13,7 @@
     "nan": "^2.0.9"
   },
   "engines": {
-    "node": ">=0.10.0"
+    "node": ">=4.0.0"
   },
   "os": [
     "win32"
