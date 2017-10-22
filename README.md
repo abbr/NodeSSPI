@@ -20,7 +20,7 @@ Despite of the resemblance, NodeSSPI is not an exact feature-wize like-for-like 
 ### Overview
 Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js. In fact, at runtime it has no npm module dependencies.
 
-```
+```javascript
 'use strict'
 
 var express = require('express')
@@ -57,7 +57,7 @@ server.listen(port, function () {
 })
 ```
 If you put above code in a file, say *index.js*, and run following commands from the same directory:
-```
+```shell
 npm install node-sspi
 npm install express
 node index.js
@@ -135,7 +135,7 @@ Prerequisites: Visual Studio 2017
 
 Run:
 
-```
+```shell
 git clone git@github.com:abbr/NodeSSPITest.git NodeSSPI
 cd NodeSSPI
 npm install
