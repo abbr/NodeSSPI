@@ -109,6 +109,11 @@ void note_sspi_auth_failure(const Handle<Object> opts, const Handle<Object> req,
 	}
 	auto authHArr = Nan::New<v8::Array>(nWays);
 	int curIdx = 0;
+	if (offerSSPI) {
+		for (int i = 0; i < nSSPIPkgs; i++) {
+			authHArr->Set(curIdx++, opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(i));
+		}
+	}
 	if (offerBasic) {
 		std::string basicStr("Basic");
 		if (opts->Has(Nan::New<String>("domain").ToLocalChecked())) {
@@ -118,11 +123,6 @@ void note_sspi_auth_failure(const Handle<Object> opts, const Handle<Object> req,
 			basicStr += "\"";
 		}
 		authHArr->Set(curIdx++, Nan::New<String>(basicStr.c_str()).ToLocalChecked());
-	}
-	if (offerSSPI) {
-		for (int i = 0; i < nSSPIPkgs; i++) {
-			authHArr->Set(curIdx++, opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(i));
-		}
 	}
 	Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), authHArr };
 	res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 2, argv);
