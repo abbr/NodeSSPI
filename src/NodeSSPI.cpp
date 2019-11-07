@@ -1,65 +1,11 @@
 #include "NodeSSPI.h"
 
-using namespace v8;
+using namespace Napi;
 using namespace std;
 
 sspi_module_rec sspiModuleInfo = { 0, };
 
 std::map<std::string, credHandleRec> credMap;
-
-class NodeSSPIException : public std::exception {
-public:
-	NodeSSPIException(const char * pMsg, const UINT http_code = 500)
-		: std::exception(pMsg), http_code(http_code) {
-	}
-	UINT http_code;
-};
-
-class Baton {
-public:
-	Baton() {
-		err = 0;
-		pGroups = 0;
-		basicDomain = 0;
-		pInToken = 0;
-		pSCR = 0;
-		isTesting = false;
-	}
-	~Baton() {
-		if (!callback.IsEmpty())	callback.Reset();
-		if (!req.IsEmpty()) req.Reset();
-		if (!res.IsEmpty()) res.Reset();
-		if (!conn.IsEmpty()) conn.Reset();
-		if (!opts.IsEmpty()) opts.Reset();
-		if (pGroups) delete pGroups;
-		if (err) delete err;
-		if (basicDomain) delete basicDomain;
-		if (pInToken) free(pInToken);
-	}
-	uv_work_t request;
-	Nan::Persistent<v8::Function> callback;
-	//int error_code;
-	//std::string error_message;
-
-	// Custom data
-	Nan::Persistent<v8::Object> req;
-	Nan::Persistent<v8::Object> res;
-	Nan::Persistent<v8::Object> conn;
-	Nan::Persistent<v8::Object> opts;
-	std::string sspiPkg;
-	ULONG ss;
-	std::string user;
-	std::string userSid;
-	bool retrieveGroups;
-	NodeSSPIException * err;
-	std::vector<std::string> *pGroups;
-	BYTE *pInToken;
-	ULONG pInTokenSz;
-	sspi_connection_rec *pSCR;
-	std::string *basicDomain;
-	// are we running module installation testing?
-	bool isTesting;
-};
 
 void sspi_module_cleanup()
 {
@@ -94,52 +40,53 @@ void init_module()
 	}
 }
 
-void note_sspi_auth_failure(const Handle<Object> opts, const Handle<Object> req, Handle<Object> res) {
+void note_sspi_auth_failure(const Napi::Env env, const Napi::Object opts, const Napi::Object req, Napi::Object res) {
+
 	int nWays = 0;
 	int nSSPIPkgs = 0;
 	bool offerBasic = false, offerSSPI = false;
-	if (opts->Get(Nan::New<String>("offerBasic").ToLocalChecked())->BooleanValue()) {
+	if (opts.Get(Napi::String::New(env, "offerBasic")).As<Napi::Boolean>().Value()) {
 		offerBasic = true;
 		nWays += 1;
 	}
-	if (opts->Get(Nan::New<String>("offerSSPI").ToLocalChecked())->BooleanValue()) {
+	if (opts.Get(Napi::String::New(env, "offerSSPI")).As<Napi::Boolean>().Value()) {
 		offerSSPI = true;
-		nSSPIPkgs = opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(Nan::New<String>("length").ToLocalChecked())->ToInteger()->Uint32Value();
+		nSSPIPkgs = opts.Get(Napi::String::New(env, "sspiPackagesUsed")).ToObject().Get(Napi::String::New(env, "length")).As<Napi::Number>().Uint32Value();
 		nWays += nSSPIPkgs;
 	}
-	auto authHArr = Nan::New<v8::Array>(nWays);
+	auto authHArr = Napi::Array::New(env, nWays);
 	int curIdx = 0;
+
 	if (offerSSPI) {
 		for (int i = 0; i < nSSPIPkgs; i++) {
-			authHArr->Set(curIdx++, opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(i));
+			authHArr.Set(curIdx++, opts.Get(Napi::String::New(env, "sspiPackagesUsed")).ToObject().Get(i));
 		}
 	}
 	if (offerBasic) {
 		std::string basicStr("Basic");
-		if (opts->Has(Nan::New<String>("domain").ToLocalChecked())) {
+		if (opts.Get(Napi::String::New(env, "domain"))) {
 			basicStr += " realm=\"";
-			String::Utf8Value dom(opts->Get(Nan::New<String>("domain").ToLocalChecked()));
-			basicStr += std::string(*dom);
+			basicStr += opts.Get(Napi::String::New(env, "domain")).ToString().Utf8Value();
 			basicStr += "\"";
 		}
-		authHArr->Set(curIdx++, Nan::New<String>(basicStr.c_str()).ToLocalChecked());
+		authHArr.Set(curIdx++, Napi::String::New(env, basicStr.c_str()));
 	}
-	Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), authHArr };
-	res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 2, argv);
-	res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(401));
+	napi_value argv[] = { Napi::String::New(env, "WWW-Authenticate"), authHArr };
+	res.Get(Napi::String::New(env, "setHeader")).As<Napi::Function>().Call(res, 2, argv);
+	res.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, 401));
 }
 
-void CleanupAuthenicationResources(Handle<Object> conn
-	, PCtxtHandle pSvrCtxHdl = NULL)
+void CleanupAuthenicationResources(Napi::Env env, Napi::Object conn
+, PCtxtHandle pSvrCtxHdl = NULL)
 {
 	try {
 		if (pSvrCtxHdl && pSvrCtxHdl->dwUpper > 0 && pSvrCtxHdl->dwLower > 0) {
 			sspiModuleInfo.functable->DeleteSecurityContext(pSvrCtxHdl);
 			pSvrCtxHdl->dwUpper = pSvrCtxHdl->dwLower = 0;
 		}
-		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("svrCtx").ToLocalChecked()).FromMaybe(false)) {
-			Local<External> wrap = Local<External>::Cast(conn->Get(Nan::New<String>("svrCtx").ToLocalChecked())->ToObject()->GetInternalField(0));
-			sspi_connection_rec *pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
+		if (conn.HasOwnProperty(Napi::String::New(env, "svrCtx"))) {
+			Napi::External<sspi_connection_rec> wrap = conn.Get(Napi::String::New(env, "svrCtx")).As<Napi::External<sspi_connection_rec> >();
+			sspi_connection_rec *pSCR = wrap.Data();
 			if (pSCR) {
 				PCtxtHandle outPch = &pSCR->server_context;
 				if (outPch && outPch->dwLower > 0 && outPch->dwUpper > 0) {
@@ -148,7 +95,7 @@ void CleanupAuthenicationResources(Handle<Object> conn
 				}
 				delete pSCR;
 			}
-			conn->Delete(Nan::New<String>("svrCtx").ToLocalChecked());
+			conn.Delete(Napi::String::New(env, "svrCtx"));
 		}
 	}
 	catch (...) {}
@@ -445,38 +392,37 @@ void RetrieveUserGroups(PCtxtHandle pServerCtx, vector<std::string> *pGroups) {
 	}
 }
 
-void WrapUpAsyncAfterAuth(Baton* pBaton) {
-	Local<Object> lRes = Nan::New(pBaton->res);
-	Local<Object> lOpts = Nan::New(pBaton->opts);
+void WrapUpAsyncAfterAuth(const Env env, Baton* pBaton) {
+	Napi::Object lRes = pBaton->res.Value();
+	Napi::Object lOpts = pBaton->opts.Value();
 	if (pBaton->err) {
-		lRes->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(pBaton->err->http_code));
+		lRes.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, pBaton->err->http_code));
 		pBaton->res.Reset(lRes);
-		Handle<Value> argv[] = { Nan::New<String>(pBaton->err->what()).ToLocalChecked() };
-		if (lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
-			lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), lRes, 1, argv);
+		napi_value argv[] = { Napi::String::New(env, pBaton->err->what()) };
+		if (lOpts.Get(Napi::String::New(env, "authoritative")).As<Napi::Boolean>().Value()) {
+			lRes.Get(Napi::String::New(env, "end")).As<Napi::Function>().Call(lRes, 1, argv);
 		}
 		if (!pBaton->callback.IsEmpty()) {
-			Local<Function> lCb = Nan::New(pBaton->callback);
-			lCb->Call(lCb, 1, argv);
+			Napi::Function lCb = pBaton->callback.Value();
+			lCb.Call(lCb, 1, argv);
 		}
 	}
 	else {
-		if (lRes->Get(Nan::New<String>("statusCode").ToLocalChecked())->Int32Value() == 401) {
-			Handle<Value> argv[] = { Nan::New<String>("Login aborted.").ToLocalChecked() };
-			if (lOpts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
-				lRes->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), lRes, 1, argv);
+		if (lRes.Get(Napi::String::New(env, "statusCode")).As<Napi::Number>().Int32Value() == 401) {
+			napi_value argv[] = { Napi::String::New(env, "Login aborted.") };
+			if (lOpts.Get(Napi::String::New(env, "authoritative")).As<Napi::Boolean>().Value()) {
+				lRes.Get(Napi::String::New(env, "end")).As<Napi::Function>().Call(lRes, 1, argv);
 			}
 		}
 		if (!pBaton->callback.IsEmpty()) {
-			Local<Function> lCb = Nan::New(pBaton->callback);
-			lCb->Call(lCb, 0, NULL);
+			Napi::Function lCb = pBaton->callback.Value();
+			lCb.Call(lCb, 0, NULL);
 		}
 	}
 	delete pBaton;
 }
 
-void AsyncBasicAuth(uv_work_t* req) {
-	Baton* pBaton = static_cast<Baton*>(req->data);
+void AsyncBasicAuth(Baton* pBaton) {
 	try {
 		std::string sspiPkg = pBaton->sspiPkg;
 		acquireServerCredential(sspiPkg);
@@ -593,36 +539,35 @@ void AsyncBasicAuth(uv_work_t* req) {
 	}
 }
 
-void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
-	Nan::HandleScope scope;
-	Baton* pBaton = static_cast<Baton*>(uvReq->data);
+void AsyncAfterBasicAuth(const Env env, Baton* pBaton/*, int status*/) {
+	Napi::HandleScope scope(env);
 	try {
 		ULONG ss = pBaton->ss;
-		auto conn = Nan::New(pBaton->conn);
-		auto req = Nan::New(pBaton->req);
-		auto res = Nan::New(pBaton->res);
-		auto opts = Nan::New(pBaton->opts);
+		auto conn = pBaton->conn.Value();
+		auto req = pBaton->req.Value();
+		auto res = pBaton->res.Value();
+		auto opts = pBaton->opts.Value();
 		if (pBaton->err) throw pBaton->err;
 		auto pServerCtx = &pBaton->pSCR->server_context;
-		CleanupAuthenicationResources(conn, pServerCtx);
+		CleanupAuthenicationResources(env, conn, pServerCtx);
 		switch (ss) {
 		case SEC_E_OK:
 		{
 			if (!pBaton->user.empty()) {
-				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
+				conn.Set(Napi::String::New(env, "user"), Napi::String::New(env, pBaton->user.c_str()));
 				if (pBaton->pGroups) {
-					auto groups = Nan::New<v8::Array>(static_cast<uint32_t>(pBaton->pGroups->size()));
+					auto groups = Napi::Array::New(env, static_cast<uint32_t>(pBaton->pGroups->size()));
 					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
+						groups.Set(i, Napi::String::New(env, pBaton->pGroups->at(i).c_str()));
 					}
-					conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
+					conn.Set(Napi::String::New(env, "userGroups"), groups);
 				}
 			}
 			else {
 				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 			if (!pBaton->userSid.empty()) {
-				conn->Set(Nan::New<String>("userSid").ToLocalChecked(), Nan::New<String>(pBaton->userSid.c_str()).ToLocalChecked());
+				conn.Set(Napi::String::New(env, "userSid"), Napi::String::New(env, pBaton->userSid.c_str()));
 			}
 			break;
 		}
@@ -631,24 +576,24 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 		{
-			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
+			res.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, 500));
 			break;
 		}
 		case SEC_E_INVALID_TOKEN:
 		case SEC_E_LOGON_DENIED:
 		default:
 		{
-			note_sspi_auth_failure(opts, req, res);
-			if (!conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
-				conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-					, Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value() - 1));
+			note_sspi_auth_failure(env, opts, req, res);
+			if (!conn.HasOwnProperty(Napi::String::New(env, "remainingAttempts"))) {
+				conn.Set(Napi::String::New(env, "remainingAttempts")
+					, Napi::Number::New(env, opts.Get(Napi::String::New(env, "maxLoginAttemptsPerConnection")).As<Napi::Number>().Int32Value() - 1));
 			}
-			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
+			int remainingAttmpts = conn.Get(Napi::String::New(env, "remainingAttempts")).As<Napi::Number>().Int32Value();
 			if (remainingAttmpts <= 0) {
 				throw new NodeSSPIException("Max login attempts reached.", 403);
 			}
-			conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-				, Nan::New<Integer>(remainingAttmpts - 1));
+			conn.Set(Napi::String::New(env, "remainingAttempts")
+				, Napi::Number::New(env, remainingAttmpts - 1));
 			break;
 		}
 		}
@@ -658,19 +603,18 @@ void AsyncAfterBasicAuth(uv_work_t* uvReq, int status) {
 	}
 	// SCR doesn't span across requests for basic auth
 	delete pBaton->pSCR;
-	WrapUpAsyncAfterAuth(pBaton);
+	WrapUpAsyncAfterAuth(env, pBaton);
 }
 
-void basic_authentication(const Local<Object> opts, const Local<Object> req
-	, Local<Object> res, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, Local<Function> cb) {
+void basic_authentication(const Napi::Env env, const Napi::Object opts, const Napi::Object req
+	, Napi::Object res, Napi::Object conn, BYTE *pInToken
+	, ULONG sz, Napi::Function cb) {
 	std::string sspiPkg(sspiModuleInfo.defaultPackage);
-	if (opts->Has(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())) {
-		auto firstSSPIPackage = opts->Get(Nan::New<String>("sspiPackagesUsed").ToLocalChecked())->ToObject()->Get(0);
-		sspiPkg = *v8::String::Utf8Value(firstSSPIPackage);
+	if (opts.Has(Napi::String::New(env, "sspiPackagesUsed"))) {
+		auto firstSSPIPackage = opts.Get(Napi::String::New(env, "sspiPackagesUsed")).ToObject().Get((uint32_t)0);
+		sspiPkg = firstSSPIPackage.ToString().Utf8Value();
 	}
 	Baton *pBaton = new Baton();
-	pBaton->request.data = pBaton;
 	pBaton->callback.Reset(cb);
 	pBaton->req.Reset(req);
 	pBaton->conn.Reset(conn);
@@ -679,25 +623,24 @@ void basic_authentication(const Local<Object> opts, const Local<Object> req
 	pBaton->sspiPkg = sspiPkg;
 	pBaton->pInToken = pInToken;
 	pBaton->pInTokenSz = sz;
-	pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
-	if (req->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("isTestingNodeSSPI").ToLocalChecked()).FromMaybe(false)
-		&& req->Get(Nan::New<String>("isTestingNodeSSPI").ToLocalChecked())->BooleanValue()) {
+	pBaton->retrieveGroups = opts.Get(Napi::String::New(env, "retrieveGroups")).As<Napi::Boolean>().Value();
+	if (req.HasOwnProperty(Napi::String::New(env, "isTestingNodeSSPI"))
+		&& req.Get(Napi::String::New(env, "isTestingNodeSSPI")).As<Napi::Boolean>().Value()) {
 		pBaton->isTesting = true;
 	}
-	if (opts->Has(Nan::New<String>("domain").ToLocalChecked())) {
-		pBaton->basicDomain = new std::string(*String::Utf8Value(opts->Get(Nan::New<String>("domain").ToLocalChecked())));
+	if (opts.Has(Napi::String::New(env, "domain"))) {
+		pBaton->basicDomain = new std::string(opts.Get(Napi::String::New(env, "domain")).ToString().Utf8Value());
 	}
-	uv_queue_work(uv_default_loop(), &pBaton->request,
-		AsyncBasicAuth, AsyncAfterBasicAuth);
+	AsyncBasicWorker* basicWorker = new AsyncBasicWorker(cb, pBaton);
+    basicWorker->Queue();
 }
 
-NAN_METHOD(onConnectionClose) {
-	Local<v8::Object> conn = info.This();
-	CleanupAuthenicationResources(conn);
+Napi::Value onConnectionClose(const Napi::CallbackInfo& info) {
+	CleanupAuthenicationResources(info.Env(), info.This().ToObject());
+	return info.Env().Undefined();
 }
 
-void AsyncSSPIAuth(uv_work_t* req) {
-	Baton* pBaton = static_cast<Baton*>(req->data);
+void AsyncSSPIAuth(Baton* pBaton) {
 	try {
 		std::string schema = pBaton->sspiPkg;
 		acquireServerCredential(schema);
@@ -756,16 +699,15 @@ void AsyncSSPIAuth(uv_work_t* req) {
 	}
 }
 
-void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
-	Nan::HandleScope scope;
-	Baton* pBaton = static_cast<Baton*>(uvReq->data);
+void AsyncAfterSSPIAuth(Env env, Baton* pBaton) {
+	Napi::HandleScope scope(env);
 	BYTE *  pOutBuf = pBaton->pInToken;
-	auto opts = Nan::New(pBaton->opts);
-	auto res = Nan::New(pBaton->res);
+	auto opts = pBaton->opts.Value();
+	auto res = pBaton->res.Value();
 	try {
 		ULONG ss = pBaton->ss;
-		auto conn = Nan::New(pBaton->conn);
-		auto req = Nan::New(pBaton->req);
+		auto conn = pBaton->conn.Value();
+		auto req = pBaton->req.Value();
 		if (pBaton->err) throw pBaton->err;
 		ULONG tokSz = pBaton->pInTokenSz;
 		switch (ss) {
@@ -781,26 +723,26 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 				&base64Length, ATL_BASE64_FLAG_NOCRLF);
 			base64.ReleaseBufferSetLength(base64Length);
 			std::string authHStr = pBaton->sspiPkg + " " + std::string(base64.GetString());
-			Handle<Value> argv[] = { Nan::New<String>("WWW-Authenticate").ToLocalChecked(), Nan::New<String>(authHStr.c_str()).ToLocalChecked() };
-			res->Get(Nan::New<String>("setHeader").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 2, argv);
-			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(401));
+			napi_value argv[] = { Napi::String::New(env, "WWW-Authenticate"), Napi::String::New(env, authHStr.c_str()) };
+			res.Get(Napi::String::New(env, "setHeader")).As<Napi::Function>().Call(res, 2, argv);
+			res.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, 401));
 			break;
 		}
 		case SEC_E_INVALID_TOKEN:
 		case SEC_E_LOGON_DENIED:
 		{
-			note_sspi_auth_failure(opts, req, res);
-			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-			if (!conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
-				conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-					, Nan::New<Integer>(opts->Get(Nan::New<String>("maxLoginAttemptsPerConnection").ToLocalChecked())->Int32Value() - 1));
+			note_sspi_auth_failure(env, opts, req, res);
+			CleanupAuthenicationResources(env, conn, &pBaton->pSCR->server_context);
+			if (!conn.HasOwnProperty(Napi::String::New(env, "remainingAttempts"))) {
+				conn.Set(Napi::String::New(env, "remainingAttempts")
+					, Napi::Number::New(env, opts.Get(Napi::String::New(env, "maxLoginAttemptsPerConnection")).As<Napi::Number>().Int32Value() - 1));
 			}
-			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
+			int remainingAttmpts = conn.Get(Napi::String::New(env, "remainingAttempts")).As<Napi::Number>().Int32Value();
 			if (remainingAttmpts <= 0) {
 				throw new NodeSSPIException("Max login attempts reached.", 403);
 			}
-			conn->Set(Nan::New<String>("remainingAttempts").ToLocalChecked()
-				, Nan::New<Integer>(remainingAttmpts - 1));
+			conn.Set(Napi::String::New(env, "remainingAttempts")
+				, Napi::Number::New(env, remainingAttmpts - 1));
 			break;
 		}
 		case SEC_E_INVALID_HANDLE:
@@ -808,21 +750,21 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 		case SEC_E_NO_AUTHENTICATING_AUTHORITY:
 		case SEC_E_INSUFFICIENT_MEMORY:
 		{
-			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
-			res->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(500));
+			CleanupAuthenicationResources(env, conn, &pBaton->pSCR->server_context);
+			res.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, 500));
 			break;
 		}
 		case SEC_E_OK:
 		{
-			CleanupAuthenicationResources(conn, &pBaton->pSCR->server_context);
+			CleanupAuthenicationResources(env, conn, &pBaton->pSCR->server_context);
 			if (!pBaton->user.empty()) {
-				conn->Set(Nan::New<String>("user").ToLocalChecked(), Nan::New<String>(pBaton->user.c_str()).ToLocalChecked());
+				conn.Set(Napi::String::New(env, "user"), Napi::String::New(env, pBaton->user.c_str()));
 				if (pBaton->pGroups) {
-					auto groups = Nan::New<v8::Array>(static_cast<uint32_t>(pBaton->pGroups->size()));
+					auto groups = Napi::Array::New(env, static_cast<uint32_t>(pBaton->pGroups->size()));
 					for (ULONG i = 0; i < pBaton->pGroups->size(); i++) {
-						groups->Set(i, Nan::New<String>(pBaton->pGroups->at(i).c_str()).ToLocalChecked());
+						groups.Set(i, Napi::String::New(env, pBaton->pGroups->at(i).c_str()));
 					}
-					conn->Set(Nan::New<String>("userGroups").ToLocalChecked(), groups);
+					conn.Set(Napi::String::New(env, "userGroups"), groups);
 				}
 
 			}
@@ -830,46 +772,44 @@ void AsyncAfterSSPIAuth(uv_work_t* uvReq, int status) {
 				throw new NodeSSPIException("Cannot obtain user name.");
 			}
 			if (!pBaton->userSid.empty()) {
-				conn->Set(Nan::New<String>("userSid").ToLocalChecked(), Nan::New<String>(pBaton->userSid.c_str()).ToLocalChecked());
+				conn.Set(Napi::String::New(env, "userSid"), Napi::String::New(env, pBaton->userSid.c_str()));
 			}
 
 			break;
 		}
 		}
 	}
+
 	catch (NodeSSPIException *ex) {
 		pBaton->err = ex;
 	}
-	WrapUpAsyncAfterAuth(pBaton);
+	WrapUpAsyncAfterAuth(env, pBaton);
 }
 
-void sspi_authentication(const Local<Object> opts, const Local<Object> req
-	, Local<Object> res, std::string schema, Local<Object> conn, BYTE *pInToken
-	, ULONG sz, Local<Function> cb) {
+void sspi_authentication(const Env env, const Napi::Object opts, const Napi::Object req
+	, Napi::Object res, std::string schema, Napi::Object conn, BYTE *pInToken
+	, ULONG sz, Napi::Function cb) {
 	// acquire server context from request.connection
 	sspi_connection_rec *pSCR = 0;
-	if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("svrCtx").ToLocalChecked()).FromMaybe(false)) {
+	if (conn.HasOwnProperty(Napi::String::New(env, "svrCtx"))) {
 		// this is not initial request
-		Local<External> wrap = Local<External>::Cast(conn->Get(Nan::New<String>("svrCtx").ToLocalChecked())->ToObject()->GetInternalField(0));
-		pSCR = static_cast<sspi_connection_rec *>(wrap->Value());
+		Napi::External<sspi_connection_rec> wrap = conn.Get(Napi::String::New(env, "svrCtx")).As<Napi::External<sspi_connection_rec> >();
+		pSCR = wrap.Data();
 	}
 	else {
 		pSCR = new sspi_connection_rec();
 		pSCR->server_context.dwLower = pSCR->server_context.dwUpper = 0;
-		Isolate* isolate = Isolate::GetCurrent();
-		Handle<ObjectTemplate> svrCtx_templ = Nan::New<ObjectTemplate>();
-		svrCtx_templ->SetInternalFieldCount(1);
-		Local<Object> lObj = svrCtx_templ->NewInstance();
-		lObj->SetInternalField(0, Nan::New<External>(pSCR));
+		
+		Napi::Value lObj = Napi::External<sspi_connection_rec>::New(env, pSCR);
 		// use conn socket to hold pSCR
-		conn->Set(Nan::New<String>("svrCtx").ToLocalChecked(), lObj);
+		conn.Set(Napi::String::New(env, "svrCtx"), lObj);
 		// hook to socket close event to clean up abandoned in-progress authentications
 		// necessary to defend against attacks similar to sync flood 
-		Handle<Value> argv[] = { Nan::New<String>("close").ToLocalChecked(), Nan::New<FunctionTemplate>(onConnectionClose)->GetFunction() };
-		conn->Get(Nan::New<String>("on").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), conn, 2, argv);
+
+		napi_value argv[] = { Napi::String::New(env, "close"), Napi::Function::New(conn.Env(), onConnectionClose) };
+		conn.Get(Napi::String::New(env, "on")).As<Napi::Function>().Call(conn, 2, argv);
 	}
 	Baton *pBaton = new Baton();
-	pBaton->request.data = pBaton;
 	pBaton->callback.Reset(cb);
 	pBaton->req.Reset(req);
 	pBaton->conn.Reset(conn);
@@ -879,58 +819,61 @@ void sspi_authentication(const Local<Object> opts, const Local<Object> req
 	pBaton->pInToken = pInToken;
 	pBaton->pInTokenSz = sz;
 	pBaton->pSCR = pSCR;
-	pBaton->retrieveGroups = opts->Get(Nan::New<String>("retrieveGroups").ToLocalChecked())->BooleanValue();
-	uv_queue_work(uv_default_loop(), &pBaton->request,
-		AsyncSSPIAuth, AsyncAfterSSPIAuth);
+	pBaton->retrieveGroups = opts.Get(Napi::String::New(env, "retrieveGroups")).As<Napi::Boolean>().Value();
+
+	AsyncSSPIWorker* basicWorker = new AsyncSSPIWorker(cb, pBaton);
+    basicWorker->Queue();
 }
 
-/*
-* args[0]: opts
-* args[1]: req
-* args[2]: res
-*/
-NAN_METHOD(Authenticate) {
-	auto opts = info[0]->ToObject();
-	auto res = info[2]->ToObject();
-	Local<Object> conn;
-	Local<Function> cb;
-	if (info[3]->IsFunction()) {
-		cb = Local<Function>::Cast(info[3]);
+// /*
+// * args[0]: opts
+// * args[1]: req
+// * args[2]: res
+// */
+Napi::Value Authenticate(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+	auto opts = info[0].ToObject();
+	auto res = info[2].ToObject();
+	Napi::Object conn;
+	Napi::Function cb;
+
+	if (info[3].IsFunction()) {
+		cb = info[3].As<Napi::Function>();
 	}
 	try {
-		auto req = info[1]->ToObject();
-		conn = req->Get(Nan::New<String>("connection").ToLocalChecked())->ToObject();
-		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("user").ToLocalChecked()).FromMaybe(false)) {
+		auto req = info[1].ToObject();
+		conn = req.Get(Napi::String::New(env, "connection")).ToObject();
+		if (conn.HasOwnProperty(Napi::String::New(env, "user"))) {
 			if (!cb.IsEmpty()) {
-				cb->Call(cb, 0, NULL);
+				cb.Call(cb, 0, NULL);
 			}
-			return;
+			return env.Undefined();
 		}
 		if (sspiModuleInfo.supportsSSPI == FALSE) {
 			throw NodeSSPIException("Doesn't suport SSPI.");
 		}
-		auto headers = req->Get(Nan::New<String>("headers").ToLocalChecked())->ToObject();
+		auto headers = req.Get(Napi::String::New(env, "headers")).ToObject();
 
-		if (conn->HasOwnProperty(Isolate::GetCurrent()->GetCurrentContext(), Nan::New<String>("remainingAttempts").ToLocalChecked()).FromMaybe(false)) {
-			int remainingAttmpts = conn->Get(Nan::New<String>("remainingAttempts").ToLocalChecked())->Int32Value();
+		if (conn.HasOwnProperty(Napi::String::New(env, "remainingAttempts"))) {
+			int remainingAttmpts = conn.Get(Napi::String::New(env, "remainingAttempts")).As<Napi::Number>().Int32Value();
 			if (remainingAttmpts < 0) {
 				throw NodeSSPIException("Max login attempts reached.", 403);
 			}
 		}
-
-		if (!headers->Has(Nan::New<String>("authorization").ToLocalChecked())) {
-			note_sspi_auth_failure(opts, req, res);
-			if (opts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()
-				&& !req->Get(Nan::New<String>("connection").ToLocalChecked())->ToObject()->Has(Nan::New<String>("user").ToLocalChecked())
+		if (!headers.Has(Napi::String::New(env, "authorization"))) {
+			note_sspi_auth_failure(env, opts, req, res);
+			if (opts.Get(Napi::String::New(env, "authoritative")).As<Napi::Boolean>().Value()
+				&& !req.Get(Napi::String::New(env, "connection")).ToObject().Has(Napi::String::New(env, "user"))
 				) {
-				res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 0, NULL);
+				res.Get(Napi::String::New(env, "end")).As<Napi::Function>().Call(res, 0, NULL);
 			}
 			if (!cb.IsEmpty()) {
-				cb->Call(cb, 0, NULL);
+				cb.Call(cb, 0, NULL);
 			}
-			return;
+			return env.Undefined();
 		}
-		auto aut = std::string(*String::Utf8Value(headers->Get(Nan::New<String>("authorization").ToLocalChecked())));
+
+		auto aut = std::string(headers.Get(Napi::String::New(env, "authorization")).ToString());
 		stringstream ssin(aut);
 		std::string schema, strToken;
 		ssin >> schema;
@@ -938,31 +881,83 @@ NAN_METHOD(Authenticate) {
 		// base64 decode strToken
 		int sz = static_cast<int>(strToken.length());
 		BYTE * pToken = static_cast<BYTE*>(calloc(sz, 1));
+
 		if (!Base64Decode(strToken.c_str(), sz, pToken, &sz)) {
 			throw NodeSSPIException("Cannot decode authorization field.");
 		};
+
 		if (_stricmp(schema.c_str(), "basic") == 0) {
-			basic_authentication(opts, req, res, conn, pToken, sz, cb);
+			basic_authentication(env, opts, req, res, conn, pToken, sz, cb);
 		}
 		else {
-			sspi_authentication(opts, req, res, schema, conn, pToken, sz, cb);
+			sspi_authentication(env, opts, req, res, schema, conn, pToken, sz, cb);
 		}
 	}
 	catch (NodeSSPIException &ex) {
-		CleanupAuthenicationResources(conn);
-		info[2]->ToObject()->Set(Nan::New<String>("statusCode").ToLocalChecked(), Nan::New<Integer>(ex.http_code));
-		Handle<Value> argv[] = { Nan::New<String>(ex.what()).ToLocalChecked() };
-		if (opts->Get(Nan::New<String>("authoritative").ToLocalChecked())->BooleanValue()) {
-			res->Get(Nan::New<String>("end").ToLocalChecked())->ToObject()->CallAsFunction(Isolate::GetCurrent()->GetCurrentContext(), res, 1, argv);
+		CleanupAuthenicationResources(env, conn);
+		info[2].ToObject().Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, ex.http_code));
+		napi_value argv[] = {Napi::String::New(env, ex.what())};
+		if (opts.Get(Napi::String::New(env, "authoritative")).As<Napi::Boolean>().Value()) {
+			res.Get(Napi::String::New(env, "end")).As<Napi::Function>().Call(res, 1, argv);
 		}
-		if (!cb.IsEmpty())  cb->Call(cb, 1, argv);
+		if (!cb.IsEmpty())  cb.Call(cb, 1, argv);
 	}
+
+	return env.Undefined();
 }
 
-void init(Handle<Object> exports) {
+
+  AsyncBasicWorker::AsyncBasicWorker(Napi::Function& cb, Baton* baton)
+    : Napi::AsyncWorker(cb), pBaton(baton) {}
+  AsyncBasicWorker::~AsyncBasicWorker() {}
+
+  // Executed inside the worker-thread.
+  // It is not safe to access JS engine data structure
+  // here, so everything we need for input and output
+  // should go on `this`.
+  void AsyncBasicWorker::Execute () {
+	  AsyncBasicAuth(pBaton);
+  }
+
+  // Executed when the async work is complete
+  // this function will be run inside the main event loop
+  // so it is safe to use JS engine data again
+  void AsyncBasicWorker::OnOK() {
+    AsyncAfterBasicAuth(Env(), pBaton);
+  }
+
+  void AsyncBasicWorker::OnError() {
+	  
+  }
+
+  AsyncSSPIWorker::AsyncSSPIWorker(Napi::Function& cb, Baton* baton)
+    : Napi::AsyncWorker(cb), pBaton(baton) {}
+  AsyncSSPIWorker::~AsyncSSPIWorker() {}
+
+  // Executed inside the worker-thread.
+  // It is not safe to access JS engine data structure
+  // here, so everything we need for input and output
+  // should go on `this`.
+  void AsyncSSPIWorker::Execute () {
+	  AsyncSSPIAuth(pBaton);
+  }
+
+  // Executed when the async work is complete
+  // this function will be run inside the main event loop
+  // so it is safe to use JS engine data again
+  void AsyncSSPIWorker::OnOK() {
+    AsyncAfterSSPIAuth(Env(), pBaton);
+  }
+
+  void AsyncSSPIWorker::OnError() {
+	  
+  }
+
+Napi::Object init(Napi::Env env, Napi::Object exports) {
 	init_module();
-	exports->Set(Nan::New<String>("authenticate").ToLocalChecked(),
-		Nan::New<FunctionTemplate>(Authenticate)->GetFunction());
+	exports.Set(Napi::String::New(env, "authenticate"), 
+				Napi::Function::New(env, Authenticate));
+	return exports;
 }
 
-NODE_MODULE(nodeSSPI, init)
+NODE_API_MODULE(nodeSSPI, init)
