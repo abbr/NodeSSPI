@@ -2,38 +2,23 @@
   "targets": [
     {
       "target_name": "NodeSSPI",
-      "cflags!": [ "-fno-exceptions" ],
-      "cflags_cc!": [ "-fno-exceptions" ],
-      "xcode_settings": { "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
-        "CLANG_CXX_LIBRARY": "libc++",
-        "MACOSX_DEPLOYMENT_TARGET": "10.7",
-      },
+      "cflags!": ["-fno-exceptions"],
+      "cflags_cc!": ["-fno-exceptions"],
       "msvs_settings": {
-        "VCCLCompilerTool": { "ExceptionHandling": 1 },
+        "VCCLCompilerTool": { "ExceptionHandling": 1 }
       },
-      "sources": [
-        "src/*.h",
-        "src/*.cpp",
-      ],
-      'defines': [
-        '_UNICODE',
-        'UNICODE',
-      ],      
-      'configurations': {
-        'Release': {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
-              'ExceptionHandling': 1,
+      "sources": ["src/*.h", "src/*.cpp"],
+      "defines": ["_UNICODE", "UNICODE"],
+      "configurations": {
+        "Release": {
+          "msvs_settings": {
+            "VCCLCompilerTool": {
+              "ExceptionHandling": 1
             }
-          }          
+          }
         }
       },
-      "include_dirs" : [
-        "<!@(node -p \"require('node-addon-api').include\")"
-      ],
-      "dependencies": [
-        "<!(node -p \"require('node-addon-api').gyp\")"
-      ]
+      "include_dirs": ["<!@(node -p \"require('node-addon-api').include\")"]
     }
   ]
 }

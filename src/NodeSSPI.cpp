@@ -408,7 +408,8 @@ void WrapUpAsyncAfterAuth(const Env env, Baton* pBaton) {
 		}
 	}
 	else {
-		if (lRes.Get(Napi::String::New(env, "statusCode")).As<Napi::Number>().Int32Value() == 401) {
+		Napi::Value v = lRes.Get(Napi::String::New(env, "statusCode"));
+		if (v.IsNumber() &&  v.ToNumber().Int32Value() == 401) {
 			napi_value argv[] = { Napi::String::New(env, "Login aborted.") };
 			if (lOpts.Get(Napi::String::New(env, "authoritative")).As<Napi::Boolean>().Value()) {
 				lRes.Get(Napi::String::New(env, "end")).As<Napi::Function>().Call(lRes, 1, argv);
