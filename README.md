@@ -1,3 +1,6 @@
+# Please note
+NodeSSPI doesn't work on Node 15 onwards due to compilation error. The author has limited time investigating. Contribution is welcome.
+
 NodeSSPI
 ========
 
