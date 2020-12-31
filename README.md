@@ -21,51 +21,135 @@ Despite of the resemblance, NodeSSPI is not an exact feature-wize like-for-like 
 
 ## Usages
 ### Overview
-Following code illustrates how to add NodeSSPI to the request processing pipeline. Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js. In fact, at runtime it has no npm module dependencies.
+Following code illustrates how to add NodeSSPI to the request processing pipeline. 
+
+#### Express
+Although the code requires Express.js, NodeSSPI doesn't have to be run under the context of Express.js. In fact, at runtime it has no npm module dependencies.
 
 ```javascript
-'use strict'
+"use strict";
 
-var express = require('express')
-var app = express()
-var server = require('http').createServer(app)
-app.use(function (req, res, next) {
-  var nodeSSPI = require('node-sspi')
-  var nodeSSPIObj = new nodeSSPI({
-    retrieveGroups: true
-  })
-  nodeSSPIObj.authenticate(req, res, function(err){
-    res.finished || next()
-  })
-})
+const nodeSSPI = require("node-sspi");
+const Express = require("express");
+const app = Express();
+const server = require('http').createServer(app);
+
+const nodeSSPIObj = new nodeSSPI({
+  retrieveGroups: true
+});
+
 app.use(function(req, res, next) {
-  var out =
-    'Hello ' +
+  console.log("start");
+
+  nodeSSPIObj.authenticate(req, res, function(err){
+    console.log("authenticate finished", ctx.res.finished);
+    res.finished || next();
+  });
+});
+
+app.use(function(req, res, next) {
+  console.log("downstream...");
+  
+  let out =
+    "Hello " +
     req.connection.user +
-    '! Your sid is ' +
+    "! Your sid is " +
     req.connection.userSid +
-    ' and you belong to following groups:<br/><ul>'
+    " and you belong to following groups:<br/><ul>";
   if (req.connection.userGroups) {
-    for (var i in req.connection.userGroups) {
-      out += '<li>' + req.connection.userGroups[i] + '</li><br/>\n'
+    for (let i in req.connection.userGroups) {
+      out += "<li>" + req.connection.userGroups[i] + "</li><br/>\n";
     }
   }
-  out += '</ul>'
-  res.send(out)
-})
-// Start server
-var port = process.env.PORT || 3000
+  out += "</ul>";
+  
+  console.log("about to send");
+  res.setHeader('Content-Type', 'text/html');
+  res.setHeader('Content-Length', out.length);
+  res.write(out)
+  res.statusCode = 200;
+  res.end();
+});
+
+// Start Server
+const port = process.env.PORT || 3000;
 server.listen(port, function () {
-  console.log('Express server listening on port %d in %s mode', port, app.get('env'))
-})
+  console.log("Express server listening on port %d in %s mode", port, app.get('env'));
+});
 ```
-If you put above code in a file, say *index.js*, and run following commands from the same directory:
+
+Put above code in a file, say *index.js*, and run following commands from the same directory:
 ```shell
 npm install node-sspi
 npm install express
 node index.js
 ```
-then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
+
+#### Koa
+Here is the same example using Koa:
+```js
+"use strict";
+
+const nodeSSPI = require("node-sspi");
+const Koa = require("koa");
+const app = new Koa();
+
+const nodeSSPIObj = new nodeSSPI({
+  retrieveGroups: true
+});
+
+app.use(async (ctx, next) => {
+  ctx.respond = false;
+  console.log("start");
+
+  nodeSSPIObj.authenticate(ctx.req, ctx.res, async err => {
+    console.log("authenticate finished", ctx.res.finished);
+    if (!ctx.res.finished) {
+      await next();
+    }
+  });
+});
+
+app.use(async ctx => {
+  console.log("downstream...");
+  
+  let out =
+    "Hello " +
+    ctx.req.connection.user +
+    "! Your sid is " +
+    ctx.req.connection.userSid +
+    " and you belong to following groups:<br/><ul>";
+  if (ctx.req.connection.userGroups) {
+    for (let i in ctx.req.connection.userGroups) {
+      out += "<li>" + ctx.req.connection.userGroups[i] + "</li><br/>\n";
+    }
+  }
+  out += "</ul>";
+  
+  console.log("about to send");
+  ctx.res.setHeader('Content-Type', 'text/html');
+  ctx.res.setHeader('Content-Length', out.length);
+  ctx.res.write(out)
+  ctx.res.statusCode = 200;
+  ctx.res.end();
+});
+
+// Start Server
+const port = process.env.PORT || 3000;
+app.listen(port, function () {
+  console.log("Koa server listening on port %d in %s mode", port, app.get('env'));
+});
+```
+
+Again, put above code in a file, say *index.js*, and run following commands from the same directory:
+```shell
+npm install node-sspi
+npm install koa
+node index.js
+```
+
+#### Use either server
+...then open [http://localhost:3000](http://localhost:3000) and login with your Windows account if prompted, you will see something like
 ```
 Hello <mypc>\<me>! Your sid is S-*-*-**-**********-**********-**********-**** and you belong to following groups:
 *<mypc>\None
