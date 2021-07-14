@@ -7,7 +7,7 @@
       "msvs_settings": {
         "VCCLCompilerTool": { "ExceptionHandling": 1 }
       },
-      "sources": ["src/*.h", "src/*.cpp"],
+      "sources": ["src/NodeSSPI.h", "src/NodeSSPI.cpp"],
       "defines": ["_UNICODE", "UNICODE"],
       "configurations": {
         "Release": {
