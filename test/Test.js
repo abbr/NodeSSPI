@@ -1,7 +1,6 @@
 /* eslint-disable */
 
-
-const nodeSSPI = require('./index.js');
+const nodeSSPI = require('../index.js');
 const next = {};
 const req = {
   headers: {
