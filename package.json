@@ -21,6 +21,10 @@
     "node-addon-api": "^1.7.1",
     "bindings": "^1.1.1"
   },
+  "devDependencies": {
+    "@sealsystems/eslint-config-es": "3.7.8",
+    "@sealsystems/mocha": "4.2.3"
+  },
   "engines": {
     "node": ">=4.0.0"
   },
