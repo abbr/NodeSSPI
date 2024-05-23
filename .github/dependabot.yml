@@ -1,0 +1,35 @@
+version: 2
+registries:
+  npm-registry-npm-pkg-github-com:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    token: "${{secrets.PACKAGES_TOKEN}}"
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "00:00"
+    open-pull-requests-limit: 99
+    versioning-strategy: increase
+    allow:
+      - dependency-type: direct
+    ignore:
+      - dependency-name: "@sealsystems/eslint-config-es"
+        versions:
+          - ">= 0"
+      - dependency-name: "@sealsystems/mocha"
+        versions:
+          - ">= 0"
+      - dependency-name: "@sealsystems/semantic-release"
+        versions:
+          - ">= 0"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: chore
+      prefix-development: no-release
+      include: scope
+    registries:
+      - npm-registry-npm-pkg-github-com

@@ -1,0 +1,25 @@
+name: force-release
+
+on:
+  workflow_dispatch:
+    # No inputs needed
+
+jobs:
+  force-trigger-release:
+    name: Trigger forced release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.CI_TOKEN }}
+
+      - name: Trigger release
+        run: |
+          echo $(date) > .trigger-release
+          # Commit and push changes
+          git add .trigger-release
+          git config --local user.email "com.git@sealsystems.de"
+          git config --local user.name "${GITHUB_ACTOR}"
+          git commit -m "chore: Trigger release"
+          git push

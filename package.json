@@ -6,7 +6,16 @@
   "author": "Fred Wen<wenfred@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "install": "node ./build.js"
+    "install": "node ./build.js",
+    "bot": "bot",
+    "licenses": "license-checker --production --csv",
+    "lint": "lint",
+    "lint:fix": "lint-fix",
+    "release": "release",
+    "test": "test-run",
+    "test:coverage": "test-coverage",
+    "test:coverage:check": "test-coverage-check",
+    "test:report": "test-report"
   },
   "dependencies": {
     "node-addon-api": "^1.7.1",
@@ -28,5 +37,11 @@
     "authentication",
     "ntlm",
     "kerberos"
-  ]
+  ],
+  "release": {
+    "extends": "@sealsystems/semantic-release/node-module"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

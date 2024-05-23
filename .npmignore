@@ -1,5 +1,12 @@
-build/
-.c9/
-node_modules/
-.project
-npm-debug.log
+*
+!/bin/**
+!/lib/**
+
+# Yeoman generators
+!/generators/**
+
+# @sealsystems/semantic-release
+!/changelog-template.js
+!/generic.js
+!/node-binary.js
+!/node-module.js

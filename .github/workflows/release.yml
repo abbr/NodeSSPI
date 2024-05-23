@@ -1,0 +1,260 @@
+name: release
+
+on:
+  push:
+    branches:
+      - master
+      - "[0-9]+.[0-9]+.x"
+
+env:
+  LOG_LEVELS: fatal
+  TLS_UNPROTECTED: world
+
+jobs:
+  Test-Linux:
+    # Ignore release commits and automatic updates of build config
+    if: >
+      !startsWith(github.event.head_commit.message, 'Release') &&
+      github.event.head_commit.message != 'Update build configuration'
+
+    runs-on: ubuntu-22.04
+
+    services:
+      mongo:
+        image: ghcr.io/sealsystems/mongodb-rs:4.4.4
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.CI_TOKEN }}
+        ports:
+          - 27017:27017
+      consul:
+        image: consul:1.15.0
+        ports:
+          - 8500:8500
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.12.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.2
+          registry-url: https://npm.pkg.github.com/
+          scope: "@sealsystems"
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-node-modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Run tests
+        run: npm run bot
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+  Test-Windows:
+    # Ignore release commits and automatic updates of build config
+    if: >
+      !startsWith(github.event.head_commit.message, 'Release') &&
+      github.event.head_commit.message != 'Update build configuration'
+
+    runs-on: windows-2019
+
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.12.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.2
+          registry-url: https://npm.pkg.github.com/
+          scope: "@sealsystems"
+
+      - name: Install MongoDB 4.4.4
+        run: |
+          Write-Host "Stopping existing MongoDB service..."
+          Stop-Service mongodb -force
+
+          Write-Host "Downloading https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip ..."
+          (New-Object Net.WebClient).DownloadFile(
+            "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip",
+            "C:\mongodb-windows-x86_64-4.4.4.zip"
+          )
+
+          Write-Host "Extracting zip archive to C:\mongodb ..."
+          Expand-Archive "C:\mongodb-windows-x86_64-4.4.4.zip" -DestinationPath "C:\"
+          Rename-Item "C:\mongodb-win32-x86_64-windows-4.4.4" "C:\mongodb"
+
+          Write-Host "Creating necessary folders in C:\mongodb ..."
+          mkdir c:\mongodb\data\db | Out-Null
+          mkdir c:\mongodb\log | Out-Null
+
+          Write-Host "Writing MongoDB configuration..."
+          "systemLog:
+            destination: file
+            path: c:\mongodb\log\mongod.log
+          storage:
+            dbPath: c:\mongodb\data\db
+          replication:
+            replSetName: rs0
+          " | Out-File C:\mongodb\mongod.cfg -Encoding utf8
+
+          Write-Host "Creating seal-mongodb service..."
+          cmd /c start /wait sc create seal-mongodb binPath= "C:\mongodb\bin\mongod.exe --service --config=C:\mongodb\mongod.cfg" DisplayName= "seal-mongodb" start= "demand"
+
+          Write-Host "Starting seal-mongodb service..."
+          Start-Service seal-mongodb
+
+          Write-Host "Initiate MonogDB replicaSet..."
+          C:\mongodb\bin\mongo.exe --eval 'rs.initiate()'
+
+      - name: Install Consul 1.15.0
+        run: |
+          Write-Host "Creating necessary folders in C:\consul ..."
+          mkdir c:\consul\data | Out-Null
+
+          Write-Host "Downloading https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip ..."
+          (New-Object Net.WebClient).DownloadFile(
+            "https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip",
+            "C:\consul\consul_1.15.0_windows_amd64.zip"
+          )
+
+          Write-Host "Extracting zip archive to C:\consul ..."
+          Expand-Archive "C:\consul\consul_1.15.0_windows_amd64.zip" -DestinationPath "C:\consul"
+
+          Write-Host "Writing Consul configuration..."
+          @{
+            bind_addr="127.0.0.1"
+            data_dir="C:\consul\data"
+            bootstrap_expect=1
+            ports=@{
+              dns=53
+              http=8500
+            }
+            server=$True
+          } | ConvertTo-Json | Out-File -Filepath "C:\consul\config.json" -Encoding ascii
+
+          Write-Host "Starting Consul service..."
+          cmd /c start /wait sc create Consul binPath= "C:\consul\consul.exe agent -config-file=C:\consul\config.json" DisplayName= "Consul" start= "demand"
+          Start-Service Consul
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Run tests
+        run: npm run bot
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+  Release:
+    # Ignore release commits and automatic updates of build config
+    if: >
+      !startsWith(github.event.head_commit.message, 'Release') &&
+      github.event.head_commit.message != 'Update build configuration'
+
+    needs:
+      - Test-Linux
+      - Test-Windows
+
+    runs-on: ubuntu-22.04
+
+    env:
+      GIT_AUTHOR_EMAIL: com.git@sealsystems.de
+      GIT_AUTHOR_NAME: CI Build
+      GIT_COMMITTER_EMAIL: com.git@sealsystems.de
+      GIT_COMMITTER_NAME: CI Build
+      # Use personal access token for creating releases on GitHub
+      GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+      # Use personal access token for publishing on GitHub Packages
+      NPM_TOKEN: ${{ secrets.CI_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use personal access token for cloning (and later pushing) code
+          token: ${{ secrets.CI_TOKEN }}
+
+      - name: Use Node.js 20.12.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.2
+          registry-url: https://npm.pkg.github.com/
+          scope: "@sealsystems"
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-node-modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: "Bugfix release: Set distribution tag accordingly to not remove 'latest' tag from the current version"
+        # Only on bugfix branches
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "Patching package.json ..."
+          jq '. * { publishConfig: { tag: "bugfix" }}' < package.json > package.json.new
+          mv package.json.new package.json
+
+      - name: Trigger release
+        run: |
+          npm install --no-save @sealsystems/semantic-release@latest
+          npm run release
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      # # Debug with RDP
+      # - name: Install Ngrok
+      #   run: |
+      #     Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+      #     Expand-Archive ngrok.zip
+      #     .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      #   env:
+      #     NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      # - name: Enable TS and generate login password
+      #   run: |
+      #     # Generate password
+      #     Add-Type -AssemblyName System.Web
+      #     $env:loginpass = [System.Web.Security.Membership]::GeneratePassword(8,2)
+      #     # Install TS
+      #     Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+      #     Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+      #     Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+      #     Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "$env:loginpass" -Force)
+      #     # Print password
+      #     Write-Host "---------------------------------------"
+      #     Write-Host "Use the following credentials to login:"
+      #     Write-Host "Username: runneradmin"
+      #     Write-Host "Password: $env:loginpass"
+      #     Write-Host "---------------------------------------"
+      # - name: Create Ngrok Tunnel
+      #   run: .\ngrok\ngrok.exe tcp 3389
