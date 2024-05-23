@@ -1,23 +1,23 @@
-var fs = require('fs'),
-	path = require('path');
-var binding;
+/* eslint-disable */
+
+const fs = require('fs'),
+  path = require('path');
+let binding;
 
 // Look for binary for this platform
-var nodeV = 'node-' + /[0-9]+\.[0-9]+/.exec(process.versions.node)[0];
-var nodeVM = 'node-' + /[0-9]+/.exec(process.versions.node)[0];
-var modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch + '-' + nodeV, 'nodeSSPI');
+const nodeV = `node-${/[0-9]+\.[0-9]+/.exec(process.versions.node)[0]}`;
+const nodeVM = `node-${/[0-9]+/.exec(process.versions.node)[0]}`;
+let modPath = path.join(__dirname, 'bin', `${process.platform}-${process.arch}-${nodeV}`, 'nodeSSPI');
 try {
-	try{
-		fs.statSync(modPath + '.node');
-	}
-	catch(ex){
-		modPath = path.join(__dirname, 'bin', process.platform + '-' + process.arch + '-' + nodeVM, 'nodeSSPI');
-		fs.statSync(modPath + '.node');
-	}
-	binding = require(modPath);
-}
-catch (ex) {
-	binding = require('bindings')('nodeSSPI');
+  try {
+    fs.statSync(`${modPath}.node`);
+  } catch (ex) {
+    modPath = path.join(__dirname, 'bin', `${process.platform}-${process.arch}-${nodeVM}`, 'nodeSSPI');
+    fs.statSync(`${modPath}.node`);
+  }
+  binding = require(modPath);
+} catch (ex) {
+  binding = require('bindings')('nodeSSPI');
 }
 
 /*
@@ -35,7 +35,7 @@ catch (ex) {
 function main(opts) {
   opts = opts || {};
   // defaults
-  var defaultOpts = {
+  const defaultOpts = {
     offerSSPI: true,
     offerBasic: true,
     authoritative: true,
@@ -59,6 +59,6 @@ main.prototype.authenticate = function (req, res, cb) {
     delete req.connection.userGroups;
   }
   binding.authenticate(this.opts, req, res, cb);
-}
+};
 
 module.exports = main;

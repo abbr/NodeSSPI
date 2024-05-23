@@ -1,0 +1,45 @@
+name: publish-on-npmjs-org
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  Publish:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20.12.2
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.12.2
+        registry-url: https://npm.pkg.github.com/
+        scope: "@sealsystems"
+
+    - name: Cache Node.js modules
+      uses: actions/cache@v4
+      env:
+        cache-name: cache-node-modules
+      with:
+        # npm cache files are stored in `~/.npm` on Linux/macOS
+        path: ~/.npm
+        key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
+
+    - name: Install dependencies
+      run: npm ci
+      env:
+        # Use personal access token, must be set for *each step*
+        NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+    - name: Publish on npmjs.org
+      run: |
+        echo "Patching .npmrc ..."
+        echo "@sealsystems:registry=https://registry.npmjs.org" > .npmrc
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+
+        echo "Publishing..."
+        npm publish
+      env:
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

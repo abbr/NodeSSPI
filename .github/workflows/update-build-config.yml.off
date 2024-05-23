@@ -1,0 +1,117 @@
+name: update-build-config
+
+on:
+  schedule:
+    - cron: "1 18 * * *"
+  workflow_dispatch:
+    # No inputs needed
+
+jobs:
+  Update-Build-Configuration:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+        # Use personal access token for cloning (and later pushing) code
+        with:
+          token: ${{ secrets.CI_TOKEN }}
+
+      - name: Store name of base branch
+        run: echo "BASE_BRANCH=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
+      - name: Prepare branch nightly/update-build-configuration
+        run: |
+          git fetch --quiet
+          git checkout -B nightly/update-build-configuration
+          git reset --hard ${GITHUB_REF#refs/heads/}
+
+      - name: Use Node.js 20.12.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.2
+          registry-url: https://npm.pkg.github.com/
+          scope: "@sealsystems"
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-node-modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Set legacy-peer-deps
+        run: |
+          npm config set legacy-peer-deps $(jq -r ".seal.legacyPeerDeps" package.json)
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Install dev dependencies
+        run: npm install --only=dev
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Install Yeoman
+        run: npm install --no-save --force yo@"4.x" @sealsystems/generator-seal-node
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Update build config
+        run: npx yo @sealsystems/seal-node:oss-module --force
+        env:
+          # Use personal access token, must be set for *each step*
+          NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Check for modifications other than package-lock.json
+        run: |
+          git add .
+          #echo "NOTE: TEMPORARILY INCLUDE package-lock.json TO TAKE VERSION CHANGE INTO ACCOUNT"
+          #echo "NOTE: PLEASE DISABLE AFTER ALL REPOSITORIES ARE UPDATED!"
+          # echo Remove package-lock.json from index
+          git reset -- package-lock.json
+          if git diff --cached --exit-code; then
+            echo "No relevant changes made. Skip creating pull request."
+          else
+            echo "CREATE_PR=1" >> $GITHUB_ENV
+          fi
+
+
+      - name: Fix linting
+        if: ${{ env.CREATE_PR == '1' }}
+        run: npm run lint:fix || true
+
+      - name: Commit changes into branch nightly/update-build-configuration
+        if: ${{ env.CREATE_PR == '1' }}
+        run: |
+          # Commit and push changes
+          git add .
+          git config --local user.email "com.git@sealsystems.de"
+          git config --local user.name "${GITHUB_ACTOR}"
+          git commit -m "Update build configuration"
+          git push --force origin nightly/update-build-configuration
+
+      - name: Create pull request
+        if: ${{ env.CREATE_PR == '1' }}
+        run: |
+          # Only create a new PR if there is not already another one
+          if gh pr list | grep -q "nightly/update-build-configuration"; then
+            echo "PR already exists. Skip creating a new one."
+            exit 0
+          fi
+
+          if [ -n "" ]; then
+            reviewerOption="--reviewer "
+          fi
+
+          gh pr create \
+          --base "${BASE_BRANCH}" \
+          --title "Update build configuration" \
+          --body "The build configuration of this project is outdated and may no longer work.
+          This pull request will be merged automatically if there are no conflicts." \
+          ${reviewerOption}
+        env:
+          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
