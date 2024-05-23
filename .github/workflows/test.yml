@@ -72,68 +72,68 @@ jobs:
         registry-url: https://npm.pkg.github.com/
         scope: "@sealsystems"
 
-    - name: Install MongoDB 4.4.4
-      run: |
-        Write-Host "Downloading https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip ..."
-        (New-Object Net.WebClient).DownloadFile(
-          "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip",
-          "C:\mongodb-windows-x86_64-4.4.4.zip"
-        )
+    # - name: Install MongoDB 4.4.4
+    #   run: |
+    #     Write-Host "Downloading https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip ..."
+    #     (New-Object Net.WebClient).DownloadFile(
+    #       "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip",
+    #       "C:\mongodb-windows-x86_64-4.4.4.zip"
+    #     )
 
-        Write-Host "Extracting zip archive to C:\mongodb ..."
-        Expand-Archive "C:\mongodb-windows-x86_64-4.4.4.zip" -DestinationPath "C:\"
-        Rename-Item "C:\mongodb-win32-x86_64-windows-4.4.4" "C:\mongodb"
+    #     Write-Host "Extracting zip archive to C:\mongodb ..."
+    #     Expand-Archive "C:\mongodb-windows-x86_64-4.4.4.zip" -DestinationPath "C:\"
+    #     Rename-Item "C:\mongodb-win32-x86_64-windows-4.4.4" "C:\mongodb"
 
-        Write-Host "Creating necessary folders in C:\mongodb ..."
-        mkdir c:\mongodb\data\db | Out-Null
-        mkdir c:\mongodb\log | Out-Null
+    #     Write-Host "Creating necessary folders in C:\mongodb ..."
+    #     mkdir c:\mongodb\data\db | Out-Null
+    #     mkdir c:\mongodb\log | Out-Null
 
-        Write-Host "Writing MongoDB configuration..."
-        "systemLog:
-          destination: file
-          path: c:\mongodb\log\mongod.log
-        storage:
-          dbPath: c:\mongodb\data\db
-        " | Out-File C:\mongodb\mongod.cfg -Encoding utf8
+    #     Write-Host "Writing MongoDB configuration..."
+    #     "systemLog:
+    #       destination: file
+    #       path: c:\mongodb\log\mongod.log
+    #     storage:
+    #       dbPath: c:\mongodb\data\db
+    #     " | Out-File C:\mongodb\mongod.cfg -Encoding utf8
 
-        Write-Host "Creating MonogDB service..."
-        cmd /c start /wait sc create MongoDB binPath= "C:\mongodb\bin\mongod.exe --service --config=C:\mongodb\mongod.cfg --replSet rs" DisplayName= "MongoDB" start= "demand"
+    #     Write-Host "Creating MonogDB service..."
+    #     cmd /c start /wait sc create MongoDB binPath= "C:\mongodb\bin\mongod.exe --service --config=C:\mongodb\mongod.cfg --replSet rs" DisplayName= "MongoDB" start= "demand"
 
-        Write-Host "Starting MonogDB service..."
-        Start-Service mongodb
+    #     Write-Host "Starting MonogDB service..."
+    #     Start-Service mongodb
 
-        Write-Host "Initiate MonogDB replicaSet..."
-        C:\mongodb\bin\mongo.exe --eval 'rs.initiate()'
+    #     Write-Host "Initiate MonogDB replicaSet..."
+    #     C:\mongodb\bin\mongo.exe --eval 'rs.initiate()'
 
-    - name: Install Consul 1.15.0
-      run: |
-        Write-Host "Creating necessary folders in C:\consul ..."
-        mkdir c:\consul\data | Out-Null
+    # - name: Install Consul 1.15.0
+    #   run: |
+    #     Write-Host "Creating necessary folders in C:\consul ..."
+    #     mkdir c:\consul\data | Out-Null
 
-        Write-Host "Downloading https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip ..."
-        (New-Object Net.WebClient).DownloadFile(
-          "https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip",
-          "C:\consul\consul_1.15.0_windows_amd64.zip"
-        )
+    #     Write-Host "Downloading https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip ..."
+    #     (New-Object Net.WebClient).DownloadFile(
+    #       "https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip",
+    #       "C:\consul\consul_1.15.0_windows_amd64.zip"
+    #     )
 
-        Write-Host "Extracting zip archive to C:\consul ..."
-        Expand-Archive "C:\consul\consul_1.15.0_windows_amd64.zip" -DestinationPath "C:\consul"
+    #     Write-Host "Extracting zip archive to C:\consul ..."
+    #     Expand-Archive "C:\consul\consul_1.15.0_windows_amd64.zip" -DestinationPath "C:\consul"
 
-        Write-Host "Writing Consul configuration..."
-        @{
-          bind_addr="127.0.0.1"
-          data_dir="C:\consul\data"
-          bootstrap_expect=1
-          ports=@{
-            dns=53
-            http=8500
-          }
-          server=$True
-        } | ConvertTo-Json | Out-File -Filepath "C:\consul\config.json" -Encoding ascii
+    #     Write-Host "Writing Consul configuration..."
+    #     @{
+    #       bind_addr="127.0.0.1"
+    #       data_dir="C:\consul\data"
+    #       bootstrap_expect=1
+    #       ports=@{
+    #         dns=53
+    #         http=8500
+    #       }
+    #       server=$True
+    #     } | ConvertTo-Json | Out-File -Filepath "C:\consul\config.json" -Encoding ascii
 
-        Write-Host "Starting Consul service..."
-        cmd /c start /wait sc create Consul binPath= "C:\consul\consul.exe agent -config-file=C:\consul\config.json" DisplayName= "Consul" start= "demand"
-        Start-Service Consul
+    #     Write-Host "Starting Consul service..."
+    #     cmd /c start /wait sc create Consul binPath= "C:\consul\consul.exe agent -config-file=C:\consul\config.json" DisplayName= "Consul" start= "demand"
+    #     Start-Service Consul
 
     - name: Install dependencies
       run: npm ci
