@@ -1,4 +1,6 @@
-var addon = require('./index.js');
+/* eslint-disable */
 
-var newaddOn = new addon({name: 'hello'});
-newaddOn.sayHello(); 
+const addon = require('./index.js');
+
+const newaddOn = new addon({ name: 'hello' });
+newaddOn.sayHello();
