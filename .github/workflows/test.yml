@@ -12,55 +12,21 @@ env:
   TLS_UNPROTECTED: world
 
 jobs:
-  Test-Linux:
-    runs-on: ubuntu-22.04
+  # Test-Linux:
+  #   runs-on: ubuntu-22.04
 
-    services:
-      mongo:
-        image: ghcr.io/sealsystems/mongodb-rs:4.4.4
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.CI_TOKEN }}
-        ports:
-        - 27017:27017
-      consul:
-        image: consul:1.15.0
-        ports:
-        - 8500:8500
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Use Node.js 20.12.2
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20.12.2
-        registry-url: https://npm.pkg.github.com/
-        scope: "@sealsystems"
-
-    - name: Cache Node.js modules
-      uses: actions/cache@v4
-      env:
-        cache-name: cache-node-modules
-      with:
-        # npm cache files are stored in `~/.npm` on Linux/macOS
-        path: ~/.npm
-        key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
-
-    - name: Install dependencies
-      run: npm ci
-      env:
-        # Use personal access token, must be set for *each step*
-        NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
-
-    - name: Run tests
-      run: npm run bot
-      env:
-        # Use personal access token, must be set for *each step*
-        NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
-
-  # Test-Windows:
-  #   runs-on: windows-2019
+  #   services:
+  #     mongo:
+  #       image: ghcr.io/sealsystems/mongodb-rs:4.4.4
+  #       credentials:
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.CI_TOKEN }}
+  #       ports:
+  #       - 27017:27017
+  #     consul:
+  #       image: consul:1.15.0
+  #       ports:
+  #       - 8500:8500
 
   #   steps:
   #   - uses: actions/checkout@v4
@@ -72,68 +38,14 @@ jobs:
   #       registry-url: https://npm.pkg.github.com/
   #       scope: "@sealsystems"
 
-  #   - name: Install MongoDB 4.4.4
-  #     run: |
-  #       Write-Host "Downloading https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip ..."
-  #       (New-Object Net.WebClient).DownloadFile(
-  #         "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip",
-  #         "C:\mongodb-windows-x86_64-4.4.4.zip"
-  #       )
-
-  #       Write-Host "Extracting zip archive to C:\mongodb ..."
-  #       Expand-Archive "C:\mongodb-windows-x86_64-4.4.4.zip" -DestinationPath "C:\"
-  #       Rename-Item "C:\mongodb-win32-x86_64-windows-4.4.4" "C:\mongodb"
-
-  #       Write-Host "Creating necessary folders in C:\mongodb ..."
-  #       mkdir c:\mongodb\data\db | Out-Null
-  #       mkdir c:\mongodb\log | Out-Null
-
-  #       Write-Host "Writing MongoDB configuration..."
-  #       "systemLog:
-  #         destination: file
-  #         path: c:\mongodb\log\mongod.log
-  #       storage:
-  #         dbPath: c:\mongodb\data\db
-  #       " | Out-File C:\mongodb\mongod.cfg -Encoding utf8
-
-  #       Write-Host "Creating MonogDB service..."
-  #       cmd /c start /wait sc create MongoDB binPath= "C:\mongodb\bin\mongod.exe --service --config=C:\mongodb\mongod.cfg --replSet rs" DisplayName= "MongoDB" start= "demand"
-
-  #       Write-Host "Starting MonogDB service..."
-  #       Start-Service mongodb
-
-  #       Write-Host "Initiate MonogDB replicaSet..."
-  #       C:\mongodb\bin\mongo.exe --eval 'rs.initiate()'
-
-  #   - name: Install Consul 1.15.0
-  #     run: |
-  #       Write-Host "Creating necessary folders in C:\consul ..."
-  #       mkdir c:\consul\data | Out-Null
-
-  #       Write-Host "Downloading https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip ..."
-  #       (New-Object Net.WebClient).DownloadFile(
-  #         "https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip",
-  #         "C:\consul\consul_1.15.0_windows_amd64.zip"
-  #       )
-
-  #       Write-Host "Extracting zip archive to C:\consul ..."
-  #       Expand-Archive "C:\consul\consul_1.15.0_windows_amd64.zip" -DestinationPath "C:\consul"
-
-  #       Write-Host "Writing Consul configuration..."
-  #       @{
-  #         bind_addr="127.0.0.1"
-  #         data_dir="C:\consul\data"
-  #         bootstrap_expect=1
-  #         ports=@{
-  #           dns=53
-  #           http=8500
-  #         }
-  #         server=$True
-  #       } | ConvertTo-Json | Out-File -Filepath "C:\consul\config.json" -Encoding ascii
-
-  #       Write-Host "Starting Consul service..."
-  #       cmd /c start /wait sc create Consul binPath= "C:\consul\consul.exe agent -config-file=C:\consul\config.json" DisplayName= "Consul" start= "demand"
-  #       Start-Service Consul
+  #   - name: Cache Node.js modules
+  #     uses: actions/cache@v4
+  #     env:
+  #       cache-name: cache-node-modules
+  #     with:
+  #       # npm cache files are stored in `~/.npm` on Linux/macOS
+  #       path: ~/.npm
+  #       key: ${{ runner.os }}-${{ env.cache-name }}-20.12.2-${{ hashFiles('**/package-lock.json') }}
 
   #   - name: Install dependencies
   #     run: npm ci
@@ -146,3 +58,91 @@ jobs:
   #     env:
   #       # Use personal access token, must be set for *each step*
   #       NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+  Test-Windows:
+    runs-on: windows-2019
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20.12.2
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.12.2
+        registry-url: https://npm.pkg.github.com/
+        scope: "@sealsystems"
+
+    - name: Install MongoDB 4.4.4
+      run: |
+        Write-Host "Downloading https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip ..."
+        (New-Object Net.WebClient).DownloadFile(
+          "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4.zip",
+          "C:\mongodb-windows-x86_64-4.4.4.zip"
+        )
+
+        Write-Host "Extracting zip archive to C:\mongodb ..."
+        Expand-Archive "C:\mongodb-windows-x86_64-4.4.4.zip" -DestinationPath "C:\"
+        Rename-Item "C:\mongodb-win32-x86_64-windows-4.4.4" "C:\mongodb"
+
+        Write-Host "Creating necessary folders in C:\mongodb ..."
+        mkdir c:\mongodb\data\db | Out-Null
+        mkdir c:\mongodb\log | Out-Null
+
+        Write-Host "Writing MongoDB configuration..."
+        "systemLog:
+          destination: file
+          path: c:\mongodb\log\mongod.log
+        storage:
+          dbPath: c:\mongodb\data\db
+        " | Out-File C:\mongodb\mongod.cfg -Encoding utf8
+
+        Write-Host "Creating MonogDB service..."
+        cmd /c start /wait sc create MongoDB binPath= "C:\mongodb\bin\mongod.exe --service --config=C:\mongodb\mongod.cfg --replSet rs" DisplayName= "MongoDB" start= "demand"
+
+        Write-Host "Starting MonogDB service..."
+        Start-Service mongodb
+
+        Write-Host "Initiate MonogDB replicaSet..."
+        C:\mongodb\bin\mongo.exe --eval 'rs.initiate()'
+
+    - name: Install Consul 1.15.0
+      run: |
+        Write-Host "Creating necessary folders in C:\consul ..."
+        mkdir c:\consul\data | Out-Null
+
+        Write-Host "Downloading https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip ..."
+        (New-Object Net.WebClient).DownloadFile(
+          "https://releases.hashicorp.com/consul/1.15.0/consul_1.15.0_windows_amd64.zip",
+          "C:\consul\consul_1.15.0_windows_amd64.zip"
+        )
+
+        Write-Host "Extracting zip archive to C:\consul ..."
+        Expand-Archive "C:\consul\consul_1.15.0_windows_amd64.zip" -DestinationPath "C:\consul"
+
+        Write-Host "Writing Consul configuration..."
+        @{
+          bind_addr="127.0.0.1"
+          data_dir="C:\consul\data"
+          bootstrap_expect=1
+          ports=@{
+            dns=53
+            http=8500
+          }
+          server=$True
+        } | ConvertTo-Json | Out-File -Filepath "C:\consul\config.json" -Encoding ascii
+
+        Write-Host "Starting Consul service..."
+        cmd /c start /wait sc create Consul binPath= "C:\consul\consul.exe agent -config-file=C:\consul\config.json" DisplayName= "Consul" start= "demand"
+        Start-Service Consul
+
+    - name: Install dependencies
+      run: npm ci
+      env:
+        # Use personal access token, must be set for *each step*
+        NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
+
+    - name: Run tests
+      run: npm run bot
+      env:
+        # Use personal access token, must be set for *each step*
+        NODE_AUTH_TOKEN: ${{ secrets.CI_TOKEN }}
