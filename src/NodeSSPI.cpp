@@ -23,7 +23,7 @@ void init_module()
 	INIT_SECURITY_INTERFACE pInit;
 	SECURITY_STATUS ss = SEC_E_INTERNAL_ERROR;
 
-	sspiModuleInfo.defaultPackage = DEFAULT_SSPI_PACKAGE;
+	sspiModuleInfo.defaultPackage = LPSTR(DEFAULT_SSPI_PACKAGE);
 	try {
 		sspiModuleInfo.securityDLL = LoadLibrary(lpDllName);
 		pInit = (INIT_SECURITY_INTERFACE)GetProcAddress(sspiModuleInfo.securityDLL, CW2A(SECURITY_ENTRYPOINT));
