@@ -62,6 +62,7 @@ if (!force) {
 function build() {
     cp.spawn(
             process.platform === 'win32' ? 'node-gyp.cmd' : 'node-gyp', ['rebuild'].concat(args), {
+        shell: true,
         stdio: 'inherit'
     })
             .on('exit', function (err) {
